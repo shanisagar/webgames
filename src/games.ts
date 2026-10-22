@@ -17,6 +17,16 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "dashrush",
+    name: "Dash Rush",
+    tagline: "Swipe. Jump. Roll. Outrun the rail yard!",
+    genre: "Runner",
+    icon: "img/icons/dashrush.webp",
+    feature: "img/features/dashrush.webp",
+    description: "An endless 3-lane runner through a sunny rail yard: dodge trains and barriers, run on train roofs, grab magnets, shields and sky boosts, and unlock new runners.",
+    component: lazy(() => import("./games/dashrush")),
+  },
+  {
     id: "holehungry",
     name: "Hole Hungry",
     tagline: "Swallow the city. Be the biggest hole.",
