@@ -19,7 +19,7 @@ export const GAMES: GameEntry[] = [
   {
     id: "sunnysolitaire",
     name: "Sunny Solitaire",
-    tagline: "Classic Klondike, bright and breezy.",
+    tagline: "The classic card game, in the sun.",
     genre: "Card",
     icon: "img/icons/sunnysolitaire.webp",
     feature: "img/features/sunnysolitaire.webp",
