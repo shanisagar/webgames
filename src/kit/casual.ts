@@ -1,5 +1,5 @@
 import { AdService } from "./ads";
-import { Art } from "./art";
+import { Art, CasualArt } from "./art";
 import { Fx } from "./fx";
 import { Color, Pal, V2, V3 } from "./math";
 import { Prefs } from "./prefs";
@@ -15,7 +15,7 @@ export const CasualLook = {
   calm(_root: unknown, bloomThreshold = 1.15, vignette = 0.18) { Fx.I?.setCalm(bloomThreshold, vignette); },
 
   /** A sprite that covers the shared backdrop (order -900 keeps it under all gameplay). */
-  cover(parent: GameObject | null, sprite: Sprite, order = -900) { return Art.spr(parent, "Background", sprite, Color.white, 1, order, Art.Flat); },
+  cover(parent: GameObject | null, sprite: Sprite, order = -900) { return Art.spr(parent, "Background", CasualArt.hd(sprite), Color.white, 1, order, Art.Flat); },
 
   /** Stretches a cover sprite so it fills `view` (world units) with a small margin. */
   fitCover(sr: SpriteRenderer | null, view: V2, center = V2.zero) {

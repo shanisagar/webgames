@@ -20,6 +20,8 @@ export class Sprite {
     readonly border: [number, number, number, number] = [0, 0, 0, 0],
     /** Source pixels (also used for DOM images). */
     readonly canvas: HTMLCanvasElement | null = null,
+    /** Texture pixels per sprite pixel (procedural art is baked above its nominal size so stretched backgrounds stay smooth). */
+    readonly texScale = 1,
   ) {}
   private _url = "";
   /** data: URL for DOM use (UI images), made on first use. */
@@ -148,7 +150,8 @@ export class SpriteRenderer extends Renderer {
     img.setPosition(m.tx, m.ty);
     img.setRotation(Math.atan2(m.b, m.a));
     // Sprite is width/ppu world units wide; m already includes world→pixels.
-    img.setScale((sx / s.ppu) * (this.flipX ? -1 : 1), (sy / s.ppu) * (this.flipY ? -1 : 1) * -1);
+    const k = s.ppu * s.texScale;
+    img.setScale((sx / k) * (this.flipX ? -1 : 1), (sy / k) * (this.flipY ? -1 : 1) * -1);
     // The Unity glow shader multiplies rgb by the material intensity (HDR neon); clamped here.
     img.setTint(this.color.scale(this.material?.intensity ?? 1).rgbInt);
     img.setAlpha(Mathf.clamp01(this.color.a));

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
 import { ArcadeGame } from "./arcadegame";
-import { Art, reRegisterTextures } from "./art";
+import { Art, CasualArt, reRegisterTextures } from "./art";
 import { InputSystem, Screen } from "./input";
 import { Rect } from "./math";
 import { Camera, PostFX, Render } from "./render";
@@ -71,7 +71,7 @@ export function GameHost({ create }: { create: () => ArcadeGame }) {
         const go = new GameObject("Game");
         game = go.addComponent(create());
         game.boot();
-        if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__na = { Render, Camera, Scene, game, phaser: this.game };
+        if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__na = { Render, Camera, Scene, game, phaser: this.game, CasualArt };
       }
       update() {
         if (disposed || !game) return;
@@ -102,7 +102,10 @@ export function GameHost({ create }: { create: () => ArcadeGame }) {
       width: Math.round(w * dpr()),
       height: Math.round(h * dpr()),
       backgroundColor: "#03050f",
+      // Phaser defaults pixelArt to (zoom !== 1), which would point-sample every texture: say so explicitly.
+      pixelArt: false,
       antialias: true,
+      antialiasGL: true,
       banner: false,
       disableContextMenu: true,
       scale: { mode: Phaser.Scale.NONE, zoom: 1 / dpr() },

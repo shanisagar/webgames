@@ -18,9 +18,9 @@ function canvasOf(w: number, h: number) {
 }
 
 /** Registers a canvas as both a Phaser texture and a Sprite. Unity rows go bottom→top; canvas rows top→bottom. */
-function register(key: string, canvas: HTMLCanvasElement, ppu: number, border: number | [number, number, number, number]): Sprite {
+function register(key: string, canvas: HTMLCanvasElement, ppu: number, border: number | [number, number, number, number], texScale = 1): Sprite {
   const b: [number, number, number, number] = typeof border === "number" ? [border, border, border, border] : border;
-  const s = new Sprite(key, canvas.width, canvas.height, ppu, b, canvas);
+  const s = new Sprite(key, canvas.width / texScale, canvas.height / texScale, ppu, b, canvas, texScale);
   Render.addCanvasTexture(key, canvas);
   sprites.set(key, s);
   return s;
@@ -212,30 +212,67 @@ function key(c: Color) {
   return h(c.r) + h(c.g) + h(c.b) + h(c.a);
 }
 
+type Border = [number, number, number, number] | number;
+const recipes = new Map<string, { w: number; h: number; fn: (p: V2) => Color; border: Border; ppu: number }>();
+
+/** Rasterizes fn at `ss` texels per sprite pixel; with ss > 1 it also averages 2x2 samples per texel. */
+function bake(key: string, w: number, h: number, fn: (p: V2) => Color, border: Border, ppu: number, ss: number): Sprite {
+  const logicalW = w;
+  w *= ss; h *= ss;
+  const canvas = canvasOf(w, h);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const img = ctx.createImageData(w, h);
+  const s = 2 / w;
+  const t0 = performance.now();
+  const offs = ss > 1 ? [-0.25, 0.25] : [0];
+  const n = offs.length * offs.length;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      // rgb weighted by alpha; fully transparent texels keep their plain rgb (no dark fringes when filtered)
+      let r = 0, g = 0, b = 0, a = 0, ur = 0, ug = 0, ub = 0;
+      for (const oy of offs)
+        for (const ox of offs) {
+          const c = fn(new V2((x + 0.5 + ox) * s - 1, (y + 0.5 + oy - h * 0.5) * s));
+          const cr = Mathf.clamp01(c.r), cg = Mathf.clamp01(c.g), cb = Mathf.clamp01(c.b), ca = Mathf.clamp01(c.a);
+          r += cr * ca; g += cg * ca; b += cb * ca; a += ca;
+          ur += cr; ug += cg; ub += cb;
+        }
+      if (a > 0) { r /= a; g /= a; b /= a; } else { r = ur / n; g = ug / n; b = ub / n; }
+      const o = ((h - 1 - y) * w + x) * 4;
+      img.data[o] = Math.round(r * 255);
+      img.data[o + 1] = Math.round(g * 255);
+      img.data[o + 2] = Math.round(b * 255);
+      img.data[o + 3] = Math.round((a / n) * 255);
+    }
+  CasualArt.bakeMs += performance.now() - t0;
+  ctx.putImageData(img, 0, 0);
+  // Unity's Vector4 border is (left, bottom, right, top).
+  return register(key, canvas, ppu > 0 ? ppu : logicalW, border, ss);
+}
+
 /**
  * Procedural sprite cache with signed-distance helpers for bright, casual games (CasualKit.cs CasualArt).
  * `fn` gets p with x in [-1, 1] across the width and y in [-h/w, h/w] (same scale as x). One world unit wide.
  */
 export const CasualArt = {
-  make(k: string, w: number, h: number, fn: (p: V2) => Color, border: [number, number, number, number] | number = 0, ppu = 0): Sprite {
+  /** Total time spent baking procedural sprites (diagnostics). */
+  bakeMs: 0,
+  make(k: string, w: number, h: number, fn: (p: V2) => Color, border: Border = 0, ppu = 0): Sprite {
     const cached = sprites.get("c:" + k);
     if (cached) return cached;
-    const canvas = canvasOf(w, h);
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-    const img = ctx.createImageData(w, h);
-    const s = 2 / w;
-    for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++) {
-        const c = fn(new V2((x + 0.5) * s - 1, (y + 0.5 - h * 0.5) * s));
-        const o = ((h - 1 - y) * w + x) * 4;
-        img.data[o] = Math.round(Mathf.clamp01(c.r) * 255);
-        img.data[o + 1] = Math.round(Mathf.clamp01(c.g) * 255);
-        img.data[o + 2] = Math.round(Mathf.clamp01(c.b) * 255);
-        img.data[o + 3] = Math.round(Mathf.clamp01(c.a) * 255);
-      }
-    ctx.putImageData(img, 0, 0);
-    // Unity's Vector4 border is (left, bottom, right, top).
-    return register("c:" + k, canvas, ppu > 0 ? ppu : w, border);
+    recipes.set("c:" + k, { w, h, fn, border, ppu });
+    return bake("c:" + k, w, h, fn, border, ppu, 1);
+  },
+
+  /**
+   * Full-screen background version of a CasualArt sprite: baked at 2x with 2x2 antialiasing. Procedural art often
+   * uses hard tests (p.y < h) that show stair steps once stretched across the screen; fn works in normalized
+   * coordinates, so this is the same picture, just smooth. Used by CasualLook.cover.
+   */
+  hd(sprite: Sprite): Sprite {
+    const r = recipes.get(sprite.key);
+    if (!r || sprite.sliced || Math.max(r.w, r.h) > 512) return sprite;
+    return sprites.get(sprite.key + "@hd") ?? bake(sprite.key + "@hd", r.w, r.h, r.fn, r.border, r.ppu, 2);
   },
 
   /** Shader-style smoothstep. */
