@@ -17,6 +17,26 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "wordwonder",
+    name: "Word Wonder",
+    tagline: "Connect letters. Unlock the wonders.",
+    genre: "Word",
+    icon: "img/icons/wordwonder.webp",
+    feature: "img/features/wordwonder.webp",
+    description: "Swipe letters on the wheel to fill the crossword and travel the world's wonders. Find bonus words, use hints and hammers, and keep your streak alive.",
+    component: lazy(() => import("./games/wordwonder")),
+  },
+  {
+    id: "candynova",
+    name: "Candy Nova",
+    tagline: "Swap. Match. Go supernova.",
+    genre: "Puzzle",
+    icon: "img/icons/candynova.webp",
+    feature: "img/features/candynova.webp",
+    description: "A sweet match-3 adventure: swap candies, build striped candies and Nova bombs, break ice and clear goals across galaxies of levels.",
+    component: lazy(() => import("./games/candynova")),
+  },
+  {
     id: "lumiloop",
     name: "Lumiloop",
     tagline: "Draw loops. Capture light.",
