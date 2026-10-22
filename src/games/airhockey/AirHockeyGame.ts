@@ -1,5 +1,5 @@
 import {
-  ArcadeButton, ArcadeGame, Art, AudioClip, CasualFx, Color, Fmt, Fx, GameInfo, GameObject, howTo, Keyboard,
+  ArcadeButton, ArcadeGame, Art, AudioClip, CasualFx, CasualLook, Color, Fmt, Fx, GameInfo, GameObject, howTo, Keyboard,
   LineRenderer, LoopSource, Mathf, Mouse, overUI, Pal, Phase, Result, Screen, Sfx, Snd, SpriteRenderer, Text, TextAnchor, Time,
   Touchscreen, TouchScheme, UIKit, UINode, V2, V3,
 } from "../../kit";
@@ -194,6 +194,7 @@ export class AirHockeyGame extends ArcadeGame {
     this.matchButton.setAccent(Gold);
     this.diffButton.setAccent(P2Col);
     this.modeLabel = UIKit.at(UIKit.label(ex, "", 25, new Color(1, 1, 1, 0.85)), UIKit.Center, new V2(0, -68), new V2(980, 36));
+    CasualLook.titleCard(this.UI, new Color(0.02, 0.02, 0.09, 0.72), new V2(1060, 1060), -10);
   }
 
   private Cycle(key: string, n: number) {
@@ -279,6 +280,7 @@ export class AirHockeyGame extends ArcadeGame {
     this.Data.add("games", 1);
     this.rink = new Rink();
     this.rink.events = [];
+    this.rink.active = [true, this.mode !== 0];
     this.ai = this.mode === 1 ? new HockeyAI(HockeyLevels[this.diff], 1) : null;
     this.score = [this.headStart ? 1 : 0, 0];
     if (this.headStart) this.UI.Toast("+1 GOAL HEAD START!", 2);
@@ -420,7 +422,8 @@ export class AirHockeyGame extends ArcadeGame {
       }
     }
     // mouse: player 1's mallet follows the pointer over the table
-    if (Mouse.present && !touched[0]) {
+    // (Mouse.present only turns on after a press on the game element; a hovering mouse is enough here)
+    if (!touched[0]) {
       const mp = Mouse.position;
       if (mp.sub(this.lastMouse).sqrMagnitude > 1) this.mouseActive = true;
       this.lastMouse = mp;
@@ -616,7 +619,7 @@ export class AirHockeyGame extends ArcadeGame {
     this.Finish(new Result({
       Headline: "TIME UP!", HeadlineColor: Gold, Value: String(g), CountTo: g, NewBest: best && g > 0, Victory: stars > 0,
       BestLine: `GOALS   ·   BEST ${this.Data.get("bestSolo")}   ·   +${earned} COINS`,
-      Stats: [["GOALS", String(g)], ["BEST STREAK", String(this.bestStreakRun)], ["OWN GOALS", String(this.conceded)], ["TOP SPEED", `${Math.round(this.topSpeed * 3.6)} KM/H`]],
+      Stats: [["GOALS", String(g)], ["BEST STREAK", String(this.bestStreakRun)], ["OWN GOALS", String(this.conceded)], ["TOP SPEED", `${Math.round(this.topSpeed * 0.4)} KM/H`]],
       Primary: "PLAY AGAIN",
       Reward: this.revived ? null : () => { this.revived = true; this.clock = 20; this.Revive(); this.StartFaceoff(0); this.UI.Announce("+20 SECONDS", Gold, 1.2); },
       RewardLabel: "+20 SECONDS & CONTINUE (AD)",
@@ -625,7 +628,7 @@ export class AirHockeyGame extends ArcadeGame {
 
   private CpuResult(won: boolean) {
     const d = this.diff;
-    const stats: [string, string][] = [["LEVEL", DiffNames[d]], ["SCORE", `${this.score[0]} – ${this.score[1]}`], ["SHOTS", String(this.shots[0])], ["TOP SPEED", `${Math.round(this.topSpeed * 3.6)} KM/H`]];
+    const stats: [string, string][] = [["LEVEL", DiffNames[d]], ["SCORE", `${this.score[0]} – ${this.score[1]}`], ["SHOTS", String(this.shots[0])], ["TOP SPEED", `${Math.round(this.topSpeed * 0.4)} KM/H`]];
     if (won) {
       const streak = this.Data.get("streak") + 1;
       this.Data.set("streak", streak);
@@ -659,7 +662,7 @@ export class AirHockeyGame extends ArcadeGame {
     this.Finish(new Result({
       Headline: w < 0 ? "IT'S A DRAW!" : `${names[w]} WINS!`, HeadlineColor: w < 0 ? Gold : PlayerCols[w], Victory: true,
       Value: `${this.score[0]} – ${this.score[1]}`, BestLine: MatchNames[this.match],
-      Stats: [[`${names[0]} SHOTS`, String(this.shots[0])], [`${names[1]} SHOTS`, String(this.shots[1])], ["TOP SPEED", `${Math.round(this.topSpeed * 3.6)} KM/H`], ["TOTAL GOALS", String(this.score[0] + this.score[1])]],
+      Stats: [[`${names[0]} SHOTS`, String(this.shots[0])], [`${names[1]} SHOTS`, String(this.shots[1])], ["TOP SPEED", `${Math.round(this.topSpeed * 0.4)} KM/H`], ["TOTAL GOALS", String(this.score[0] + this.score[1])]],
       Primary: "REMATCH",
     }));
   }

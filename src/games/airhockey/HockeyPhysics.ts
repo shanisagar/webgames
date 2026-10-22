@@ -25,6 +25,8 @@ export class Rink {
   px = 0; py = 0; vx = 0; vy = 0;
   m: Mallet[] = [0, 1].map((i) => ({ x: 0, y: i === 0 ? -6.5 : 6.5, vx: 0, vy: 0, tx: 0, ty: i === 0 ? -6.5 : 6.5, max: MalletMax, px: 0, py: i === 0 ? -6.5 : 6.5 }));
   blockers: Blocker[] = [];
+  /** mallets taking part (solo has no opponent) */
+  active = [true, true];
   /** goal scored this step: 0 = into the bottom goal (player 1 scores), 1 = into the top goal, -1 none */
   goal = -1;
   puckOn = true;
@@ -94,6 +96,7 @@ export class Rink {
     this.px += this.vx * h; this.py += this.vy * h;
     // mallets (kinematic: infinite mass)
     for (let i = 0; i < 2; i++) {
+      if (!this.active[i]) continue;
       const m = this.m[i];
       let nx = this.px - m.x, ny = this.py - m.y;
       const d = Math.hypot(nx, ny), rr = RP + RM;
@@ -127,6 +130,7 @@ export class Rink {
     this.walls();
     // a mallet must never be left overlapping the puck after the walls pushed it back: slide the mallet away
     for (let i = 0; i < 2; i++) {
+      if (!this.active[i]) continue;
       const m = this.m[i];
       const dx = m.x - this.px, dy = m.y - this.py, d = Math.hypot(dx, dy), rr = RP + RM;
       if (d < rr && d > 1e-6) { m.x = this.px + (dx / d) * rr; m.y = this.py + (dy / d) * rr; }

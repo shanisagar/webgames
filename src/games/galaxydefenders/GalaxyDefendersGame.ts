@@ -95,6 +95,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
   private ended = false; private endTimer = 0; private endHead = "";
   private revived = false;
   private usingTouch = false;
+  private relayout = 0;
   private marchNote = 0;
 
   private modeButtons: ArcadeButton[] = [];
@@ -283,6 +284,9 @@ export class GalaxyDefendersGame extends ArcadeGame {
   private BuildTitle() {
     const ex = this.UI.TitleExtra;
     if (!ex) return;
+    // Kit gap: the shared logo is sized for titles up to ~12 letters; shrink ours (16) so it fits a phone.
+    const logo = (this.UI as unknown as { logo?: Text }).logo;
+    if (logo) logo.fontSize = 94;
     const labels = ["SOLO", "VS CPU", "2 PLAYERS"];
     for (let i = 0; i < 3; i++) {
       const idx = i;
@@ -290,7 +294,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
     }
     for (let i = 0; i < 3; i++) {
       const idx = i;
-      this.optButtons.push(UIKit.buttonAt(ex, "", UIKit.Center, new V2((i - 1) * 320, -112), new V2(300, 86), false, () => this.Option(idx), 27));
+      this.optButtons.push(UIKit.buttonAt(ex, "OPTION", UIKit.Center, new V2((i - 1) * 320, -112), new V2(300, 86), false, () => this.Option(idx), 27));
     }
     this.RefreshTitle();
   }
@@ -528,6 +532,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
   }
 
   protected BeginRun() {
+    this.relayout = 3;
     this.binds.clear();
     this.mode = this.SelMode;
     this.diff = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
@@ -589,7 +594,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
     if (w % 5 === 0) {
       const b = f.boss;
       b.active = true;
-      b.max = b.hp = 40 + w * 6;
+      b.max = b.hp = 24 + w * 3;
       b.t = 0; b.x = 0; b.y = f.H / 2 + 3; b.fireT = 2; b.pattern = 0; b.flash = 0;
       b.sr.gameObject.setActive(true);
       f.total = 1;
@@ -606,7 +611,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
           if (pattern === 2 && (r + c) % 2 === 1 && r > 0) continue;
           const kind = r === 0 ? 2 : r < 3 ? 1 : 0;
           const armor = (pattern === 3 && r >= 3) || (w > 5 && r === 1) || (w > 10 && r >= 3);
-          this.SpawnAlien(f, kind, armor, c, r, 6 + r * 0.6);
+          this.SpawnAlien(f, kind, armor, c, r, 6);
           n++;
         }
       f.total = n;
@@ -667,6 +672,8 @@ export class GalaxyDefendersGame extends ArcadeGame {
 
   protected TickRun(dt: number) {
     this.TickStars(dt);
+    // the HUD panels follow the fields: lay out again once the camera has settled on the new run
+    if (this.relayout > 0 && --this.relayout === 0) this.Layout();
     const split = this.mode === Mode.VsCpu || this.mode === Mode.Split;
     if (this.countdown > 0) {
       this.countdown -= dt;
@@ -802,7 +809,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
     const targetY = f.H / 2 - 3.6;
     b.y = Mathf.moveTowards(b.y, targetY, dt * 3);
     const range = f.W / 2 - 2.4;
-    b.x = Math.sin(b.t * (0.55 + (1 - b.hp / b.max) * 0.5)) * range;
+    b.x = Math.sin(b.t * (0.35 + (1 - b.hp / b.max) * 0.35)) * range;
     b.fireT -= dt;
     if (b.fireT <= 0 && b.y <= targetY + 0.01) {
       const rage = 1 - b.hp / b.max;
@@ -960,7 +967,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
       s.sr.gameObject.setActive(true);
       c.shotsFired++;
     }
-    c.fireCd = c.rapid > 0 ? 0.12 : !this.tapFire || !c.human ? 0.42 : 0.16;
+    c.fireCd = (c.rapid > 0 ? 0.12 : !this.tapFire || !c.human ? 0.32 : 0.16) * (c.bot ? [2, 1.35, 1][c.bot.diff] : 1);
     if (c.human || this.IsHumanField(f)) Sfx.playClip(this.shootClip, c.human ? 0.55 : 0.2, 0.95 + Math.random() * 0.1);
   }
 
@@ -1087,7 +1094,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
     }
     // mothership
     const b = f.boss;
-    if (b.active && Math.abs(b.x - s.pos.x) < 1.9 && Math.abs(b.y - s.pos.y) < 0.75) {
+    if (b.active && Math.abs(b.x - s.pos.x) < 2.1 && Math.abs(b.y - s.pos.y) < 0.8) {
       b.hp--;
       b.flash = 0.08;
       if (c) c.hits++;
@@ -1188,7 +1195,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
       for (const s of f.shots) {
         if (!s.active || s.friendly || s.vel.y >= 0) continue;
         const t = (s.pos.y - cy) / -s.vel.y;
-        if (t < 0 || t > look) continue;
+        if (t < -0.1 || t > look) continue;
         const sx = s.pos.x + s.vel.x * t;
         if (Math.abs(sx - x) < 0.62) return true;
       }
@@ -1205,7 +1212,7 @@ export class GalaxyDefendersGame extends ArcadeGame {
       bot.dodging = false;
       let tx: number | null = null;
       if (f.ufo.active && d > 0 && Math.abs(f.ufo.x) < f.W / 2 - 1) tx = f.ufo.x + f.ufo.dir * 1.2;
-      else if (f.boss.active) tx = f.boss.x;
+      else if (f.boss.active) { const bb = f.boss, w = 0.35 + (1 - bb.hp / bb.max) * 0.35; tx = bb.x + Math.cos(bb.t * w) * w * (f.W / 2 - 2.4) * 0.65; }
       else {
         // nearest column, lower invaders first
         let best = 1e9;
@@ -1427,7 +1434,8 @@ export class GalaxyDefendersGame extends ArcadeGame {
     if (f.invaded) {
       // push the fleet back up and repair the bunkers
       f.invaded = false;
-      f.oy += 4;
+      f.oy = f.H / 2 - 2.9;
+      for (const a of f.aliens) if (a.alive) a.row = Math.max(0, a.row);
       this.ResetBunkers(f);
     }
     for (const s of f.shots) if (!s.friendly) this.KillShot(s);

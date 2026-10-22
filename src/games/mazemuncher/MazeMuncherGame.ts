@@ -231,7 +231,7 @@ class Board {
     // texts
     this.scoreText.text = Fmt.n(sim.score);
     this.nameText.text = this.label;
-    this.ready.text = sim.state === SimState.Ready ? (sim.stateT > 0.5 ? "READY?" : "GO!") : sim.state === SimState.Over ? "GAME OVER" : sim.state === SimState.Clear ? "CLEAR!" : "";
+    this.ready.text = sim.state === SimState.Ready ? (sim.stateT > 0.5 ? "READY?" : "GO!") : sim.state === SimState.Clear ? "CLEAR!" : "";
     this.ready.color = sim.state === SimState.Over ? Pal.hex(0xff5a7a) : sim.state === SimState.Clear ? Lime : Gold;
     for (let i = 0; i < this.lifeIcons.length; i++) this.lifeIcons[i].enabled = showLives && i < sim.lives - (sim.state === SimState.Play || sim.state === SimState.Ready ? 1 : 0);
     for (let i = 0; i < this.fruitIcons.length; i++) {
@@ -535,7 +535,7 @@ export class MazeMuncherGame extends ArcadeGame {
       this.boards.push(new Board(this.world, b, maze, HeroColors[1], this.mode === 1 ? "CPU" : "P2", 1));
       if (this.mode === 1) {
         this.boards[1].bot = new MunchBot(BotLevels[this.diff], new Rng(seed ^ 0x5bd1e995));
-        b.heroSpeedMul = [0.88, 0.95, 1][this.diff];
+        b.heroSpeedMul = [0.8, 0.92, 1][this.diff];
         if (this.headStart) { b.stateT += 4; this.UI.Announce("HEAD START!", Gold, 1.2); }
       }
       this.raceT = RaceTime;
@@ -557,6 +557,8 @@ export class MazeMuncherGame extends ArcadeGame {
 
   protected TickRun(dt: number) {
     dt = this.TestFixedDt > 0 ? this.TestFixedDt : Math.min(dt, 0.05 * Math.max(1, this.SpeedMultiplier));
+    if (this.TestBudget === 0) dt = 0;
+    else if (this.TestBudget > 0) this.TestBudget--;
     this.TestFrame++;
     this.ReadInput();
     for (const b of this.boards) {
@@ -773,6 +775,8 @@ export class MazeMuncherGame extends ArcadeGame {
   /** Tests on very slow machines advance a fixed game time per rendered frame (slow motion, frame-locked input). */
   TestFixedDt = 0;
   TestFrame = 0;
+  /** Frames the test lets the game advance before it waits for the next input (-1 = run freely). */
+  TestBudget = -1;
 
   // ------------------------------------------------------------------ results
 

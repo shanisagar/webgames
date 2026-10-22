@@ -23,7 +23,7 @@ const Pixels: string[][][] = [
   ],
 ];
 
-export const AlienColors = [Pal.hex(0x7dff5a), Pal.hex(0x3ae8ff), Pal.hex(0xff4fd8)];
+export const AlienColors = [Pal.hex(0x46d82a), Pal.hex(0x3ae8ff), Pal.hex(0xff4fd8)];
 export const ArmorColor = Pal.hex(0xffd25a);
 export const AlienPoints = [10, 20, 30];
 

@@ -392,19 +392,21 @@ export class PinballGame extends ArcadeGame {
 
   protected TickRun(dt: number) {
     dt = this.TestFixedDt > 0 ? this.TestFixedDt : Math.min(dt, 0.05 * Math.max(1, this.SpeedMultiplier));
+    if (this.TestBudget === 0) dt = 0;
+    else if (this.TestBudget > 0) this.TestBudget--;
     this.TestFrame++;
     const sim = this.Sim;
     if (this.phase === "play") {
       if (this.BotTurn) this.bot!.think(sim, dt);
       else this.ReadInput(sim);
-      sim.step(dt);
+      if (dt > 0) sim.step(dt);
       for (const e of sim.events) this.OnEvent(sim, e);
       sim.events.length = 0;
       if (sim.drained) this.EndBall();
     } else {
       sim.setFlipper(0, false);
       sim.setFlipper(1, false);
-      sim.step(dt);
+      if (dt > 0) sim.step(dt);
       sim.events.length = 0;
       this.phaseT -= dt;
       if (this.phase === "bonus" && this.phaseT <= 0) this.AfterBonus();
@@ -703,6 +705,8 @@ export class PinballGame extends ArcadeGame {
   /** Tests on very slow machines advance a fixed game time per rendered frame (slow motion, frame-locked input). */
   TestFixedDt = 0;
   TestFrame = 0;
+  /** Frames the test lets the game advance before it waits for the next input (-1 = run freely). */
+  TestBudget = -1;
 
   // ------------------------------------------------------------------ display
 

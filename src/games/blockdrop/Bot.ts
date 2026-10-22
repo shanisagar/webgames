@@ -145,8 +145,8 @@ export class BotDriver {
   constructor(readonly level: number, rng: () => number) {
     this.brain = new BotBrain(level);
     this.rng = rng;
-    this.actGap = [0.16, 0.085, 0.045][level];
-    this.thinkTime = [0.55, 0.28, 0.1][level];
+    this.actGap = [0.2, 0.12, 0.07][level];
+    this.thinkTime = [0.7, 0.35, 0.18][level];
   }
 
   reset() { this.plan = null; this.planned = false; this.think = this.thinkTime; }

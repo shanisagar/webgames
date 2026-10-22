@@ -510,7 +510,7 @@ export class MazeSim {
 
 export interface BotLevel { margin: number; slip: number; think: number; hunt: boolean; sight: number; areaCap: number }
 export const BotLevels: BotLevel[] = [
-  { margin: 0, slip: 0.3, think: 0.35, hunt: false, sight: 4, areaCap: 6 },
+  { margin: 0, slip: 0.35, think: 0.4, hunt: false, sight: 4, areaCap: 6 },
   { margin: 0, slip: 0.12, think: 0.15, hunt: false, sight: 7, areaCap: 8 },
   { margin: 0.5, slip: 0, think: 0.05, hunt: true, sight: 10, areaCap: 10 },
 ];

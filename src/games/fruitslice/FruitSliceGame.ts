@@ -114,6 +114,7 @@ export class FruitSliceGame extends ArcadeGame {
   private endTimer = 0; private ended = false; private endReason = "";
   private revived = false; private doubled = false;
   private usingTouch = false;
+  private relayout = 0;
   private lastResult: Result | null = null;
   private runStars = 0;
   private attractField: Field | null = null;
@@ -556,6 +557,7 @@ export class FruitSliceGame extends ArcadeGame {
   }
 
   protected BeginRun() {
+    this.relayout = 3;
     this.attractField = null;
     this.ClearBlades();
     this.mode = this.SelectedMode;
@@ -608,6 +610,8 @@ export class FruitSliceGame extends ArcadeGame {
   }
 
   protected TickRun(dt: number) {
+    // the HUD panels follow the fields: lay out again once the camera has settled on the new run
+    if (this.relayout > 0 && --this.relayout === 0) this.Layout();
     if (this.countdown > 0) {
       this.countdown -= dt;
       const split = this.mode === Mode.VsCpu || this.mode === Mode.TwoP;

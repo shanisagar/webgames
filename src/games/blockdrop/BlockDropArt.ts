@@ -12,7 +12,7 @@ export const KindColors = [
   Pal.hex(0xff8a3d), // Z tangerine
   Pal.hex(0x3d6bff), // J blueberry
   Pal.hex(0x31e6c4), // L mint
-  Pal.hex(0x7d7aa6), // garbage
+  Pal.hex(0x5d5a80), // garbage
 ];
 
 export const P1Color = Pal.hex(0x4cc3ff);

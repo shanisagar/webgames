@@ -683,15 +683,15 @@ export class BlockDropGame extends ArcadeGame {
   private ReadGestures(countdown: boolean) {
     const now = Time.unscaledTime;
     const seen = new Set<number>();
-    const handle = (id: number, pos: V2, down: boolean, pressed: boolean, released: boolean) => {
+    const handle = (id: number, pos: V2, down: boolean, pressed: boolean, released: boolean, startPos: V2) => {
       seen.add(id);
       let g = this.gestures.get(id);
       if (pressed && !g) {
-        if (pos.y > Screen.height * 0.9 || overUI(pos)) return;
-        const player = this.mode === Mode.Duo ? (pos.x < Screen.width * 0.5 ? 0 : 1) : 0;
+        if (startPos.y > Screen.height * 0.9 || overUI(startPos)) return;
+        const player = this.mode === Mode.Duo ? (startPos.x < Screen.width * 0.5 ? 0 : 1) : 0;
         if (!this.players[player] || this.players[player].bot) return;
         for (const o of this.gestures.values()) if (o.player === player) return; // one finger per board
-        g = { id, player, start: pos, anchor: pos, startTime: now, axis: 0, moved: false, samples: [{ t: now - 1 / 60, p: pos }] };
+        g = { id, player, start: startPos, anchor: startPos, startTime: now, axis: 0, moved: false, samples: [{ t: now - 1 / 60, p: startPos }] };
         this.gestures.set(id, g);
         if (!released && down) return;
       }
@@ -704,10 +704,10 @@ export class BlockDropGame extends ArcadeGame {
         this.gestures.delete(id);
       }
     };
-    for (const t of Touchscreen.touches) handle(t.touchId, t.position, t.press.isPressed, t.press.wasPressedThisFrame, t.press.wasReleasedThisFrame);
+    for (const t of Touchscreen.touches) handle(t.touchId, t.position, t.press.isPressed, t.press.wasPressedThisFrame, t.press.wasReleasedThisFrame, t.press.wasPressedThisFrame ? t.startPosition : t.position);
     if (Mouse.present && Touchscreen.touches.length === 0) {
       const b = Mouse.leftButton;
-      if (b.isPressed || b.wasPressedThisFrame || b.wasReleasedThisFrame) handle(-1, Mouse.position, b.isPressed, b.wasPressedThisFrame, b.wasReleasedThisFrame);
+      if (b.isPressed || b.wasPressedThisFrame || b.wasReleasedThisFrame) handle(-1, Mouse.position, b.isPressed, b.wasPressedThisFrame, b.wasReleasedThisFrame, Mouse.position);
     }
     for (const id of [...this.gestures.keys()]) if (!seen.has(id)) this.gestures.delete(id);
   }
