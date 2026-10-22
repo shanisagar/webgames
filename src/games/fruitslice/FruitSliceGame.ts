@@ -73,7 +73,7 @@ class Field {
   human = true; bot: Bot | null = null; style = 0; name = "";
   fruits: Fruit[] = []; halves: Half[] = []; splats: Splat[] = []; slashes: Slash[] = [];
   fx!: CasualFx;
-  frame!: SpriteRenderer; tint!: SpriteRenderer; flash!: SpriteRenderer;
+  frame!: SpriteRenderer; edge!: SpriteRenderer; tint!: SpriteRenderer; flash!: SpriteRenderer;
   rng = new SysRandom(1);
   clock = 0; waveT = 0; queue: Pending[] = [];
   score = 0; misses = 0; lifeAt = 100; cut = 0; bestCombo = 0; crits = 0; bombs = 0; specials = 0;
@@ -240,6 +240,7 @@ export class FruitSliceGame extends ArcadeGame {
     f.index = i;
     f.root = new GameObject("Field" + i, this.world);
     f.frame = Art.spr(f.root, "Frame", Panel(), new Color(0, 0, 0, 0), 1, -800, Art.Flat);
+    f.edge = Art.spr(f.root, "Edge", Art.Glow, new Color(1, 1, 1, 0), 1, -790, Art.Additive);
     f.tint = Art.spr(f.root, "Tint", Vignette(), new Color(1, 1, 1, 0), 1, 70, Art.Flat);
     f.flash = Art.spr(f.root, "Flash", Art.Square, new Color(1, 1, 1, 0), 1, 75, Art.Flat);
     for (let k = 0; k < 30; k++) {
@@ -479,6 +480,10 @@ export class FruitSliceGame extends ArcadeGame {
       f.frame.transform.localScale = new V2(f.W + 0.1, H + 0.1);
       f.frame.color = split ? new Color(0, 0, 0, 0.16) : new Color(0, 0, 0, 0);
       f.tint.transform.localScale = new V2(f.W, H);
+      f.edge.transform.localPosition = new V3(0, -H / 2, 0);
+      f.edge.transform.localScale = new V2(f.W * 1.6, 1.6);
+      const style = f.bot && this.mode === Mode.VsCpu ? BotStyle : Blades[Mathf.clamp(f.style, 0, Blades.length - 1)];
+      f.edge.color = split ? style.glow.withAlpha(0.55) : new Color(1, 1, 1, 0);
       f.flash.transform.localScale = new V2(f.W + 0.2, H + 0.2);
       this.LayoutHud(f, cx, cy, rw, rh);
     }
@@ -959,6 +964,7 @@ export class FruitSliceGame extends ArcadeGame {
     const ss = size * (1.3 + Math.random() * 0.5);
     sp.sr.transform.localScale = new V2(ss, ss);
     sp.sr.transform.localEulerZ = Math.random() * 360;
+    sp.sr.gameObject.setActive(true);
     for (let i = 0; i < 14; i++) {
       const v = n.mul((Math.random() - 0.5) * 9).add(dir.mul(Math.random() * 5)).add(new V2(0, Math.random() * 3));
       f.fx.emit(fr.pos, v, i % 4 === 0 ? CasualArt.lighten(L.juice, 0.4) : L.juice, 0.1 + Math.random() * 0.16, 0.5 + Math.random() * 0.4, FruitArt.Drop, 16, 0, true, 0.8);
@@ -976,7 +982,7 @@ export class FruitSliceGame extends ArcadeGame {
     // scoring
     const mult = f.doubleT > 0 ? 2 : 1;
     let pts = 1;
-    const crit = speed > 15 && perp < fr.r * 0.3 && !isSpecial(fr.kind) && f.rng.nextDouble() < 0.6;
+    const crit = speed > 15 && perp < fr.r * 0.25 && !isSpecial(fr.kind) && Math.random() < 0.35;
     if (crit) {
       pts += 10;
       f.crits++;
@@ -1136,12 +1142,17 @@ export class FruitSliceGame extends ArcadeGame {
       b.prevLocal = null;
       bot.cool -= dt;
       if (bot.cool > 0) return;
-      // choose the most urgent visible fruit
-      let best: Fruit | null = null, bestScore = -1e9;
+      // choose the most urgent fruit that will still be on screen when the blade gets there
+      const pred = (fr: Fruit, t: number) => { const ft = t * f.timeScale; return fr.pos.add(fr.vel.mul(ft)).add(new V2(0, -0.5 * G * ft * ft)); };
+      let best: Fruit | null = null, bestScore = -1e9, bestT = 0;
       for (const fr of f.fruits) {
         if (!fr.active || fr.kind === Kind.Bomb || fr.age < reaction || fr.pos.y < -H / 2 + 0.4) continue;
-        const urgency = -fr.pos.y * 0.5 + (fr.vel.y < 0 ? 3 : 0) + (isSpecial(fr.kind) ? 4 : 0) + Math.random() * (3 - d);
-        if (urgency > bestScore) { bestScore = urgency; best = fr; }
+        let tArr = V2.distance(bot.pos, fr.pos) / moveSpeed + 0.1;
+        tArr = V2.distance(bot.pos, pred(fr, tArr)) / moveSpeed + 0.1;
+        const p = pred(fr, tArr);
+        if (p.y < -H / 2 + 0.7 || Math.abs(p.x) > f.W / 2 - 0.2) continue;
+        const urgency = -p.y * 0.5 + (fr.vel.y < 0 ? 2 : 0) + (isSpecial(fr.kind) ? 4 : 0) + Math.random() * (3 - d) - tArr * 2;
+        if (urgency > bestScore) { bestScore = urgency; best = fr; bestT = tArr; }
       }
       if (!best) return;
       // swipe direction: through a neighbour on HARD/MEDIUM, otherwise a random diagonal
@@ -1149,12 +1160,12 @@ export class FruitSliceGame extends ArcadeGame {
       if (d > 0) {
         let other: Fruit | null = null, od = d === 2 ? 3.2 : 2;
         for (const fr of f.fruits) if (fr.active && fr !== best && fr.kind !== Kind.Bomb && V2.distance(fr.pos, best.pos) < od) { od = V2.distance(fr.pos, best.pos); other = fr; }
-        if (other) dir = other.pos.sub(best.pos).normalized;
+        if (other) dir = pred(other, bestT).sub(pred(best, bestT)).normalized;
       }
-      const tArr = V2.distance(bot.pos, best.pos) / moveSpeed + 0.08;
-      const pred = (fr: Fruit, t: number) => { const ft = t * f.timeScale; return fr.pos.add(fr.vel.mul(ft)).add(new V2(0, -0.5 * G * ft * ft)); };
+      const tArr = bestT;
       let center = pred(best, tArr);
       if (Math.random() < missChance) center = center.add(V2.perpendicular(dir).mul(best.r * (1.3 + Math.random())));
+      else center = center.add(V2.perpendicular(dir).mul(best.r * (Math.random() - 0.5) * (d === 2 ? 0.6 : 1.1)));
       const reach = best.r + 1.1;
       let ok = false;
       for (let tries = 0; tries < 4 && !ok; tries++) {

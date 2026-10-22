@@ -653,31 +653,37 @@ export class PinBot {
     this.r = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
   }
 
+  /** Applies the bot's controls to the table. */
   think(sim: PinSim, dt: number) {
-    // plunger
+    const c = this.decide(sim, dt);
+    for (let s = 0; s < 2; s++) if (c.flip[s] !== sim.flippers[s].pressed) sim.setFlipper(s, c.flip[s]);
+    sim.setPlunger(c.plunge);
+  }
+
+  /** Which controls the bot holds this frame (also used by tests to drive real input). */
+  decide(sim: PinSim, dt: number) {
+    const out = { flip: [this.hold[0] > 0, this.hold[1] > 0], plunge: false };
     if (sim.needLaunch && sim.ballInLane) {
       this.plungeT += dt;
-      sim.setPlunger(this.plungeT > 0.5 && this.plungeT < 0.5 + 0.75 + this.r() * 0.02);
+      out.plunge = this.plungeT > 0.5 && this.plungeT < 0.5 + 0.75 + this.r() * 0.02;
       if (this.plungeT > 1.6) this.plungeT = 0;
-    } else { this.plungeT = 0; if (sim.plungerHeld) sim.setPlunger(false); }
+    } else this.plungeT = 0;
 
     for (let s = 0; s < 2; s++) {
       const f = sim.flippers[s];
       if (this.hold[s] > 0) {
         this.hold[s] -= dt;
-        if (this.hold[s] <= 0) sim.setFlipper(s, false);
+        out.flip[s] = this.hold[s] > 0;
         continue;
       }
       if (this.wait[s] >= 0) {
         this.wait[s] -= dt;
-        if (this.wait[s] < 0) { sim.setFlipper(s, true); this.hold[s] = 0.22; }
+        if (this.wait[s] < 0) { this.hold[s] = 0.22; out.flip[s] = true; }
         continue;
       }
       for (const b of sim.balls) {
         if (b.layer !== 1 || b.y > -5.5) continue;
-        // ball in flipper coordinates (rest pose)
         const ux = Math.cos(f.rest), uy = Math.sin(f.rest);
-        // look a little ahead in time
         const la = 0.035;
         const bx = b.x + b.vx * la, by = b.y + b.vy * la;
         const t = ((bx - f.px) * ux + (by - f.py) * uy) / f.len;
@@ -692,6 +698,7 @@ export class PinBot {
         break;
       }
     }
+    return out;
   }
 
   /** Where along the flipper to hit so the ball goes toward the mission shot. */

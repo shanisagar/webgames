@@ -29,7 +29,7 @@ export const BlockDropArt = {
       const a = CasualArt.fill(d, px);
       if (a <= 0) return Color.clear;
       // body: lighter top, darker bottom
-      let v = Mathf.lerp(0.78, 1.0, CasualArt.smooth(-1, 0.9, p.y));
+      let v = Mathf.lerp(0.7, 0.93, CasualArt.smooth(-1, 0.9, p.y));
       // bevel rim
       const rim = CasualArt.smooth(-0.2, -0.02, d);
       const lightDir = (p.y - p.x) * 0.5;
@@ -40,7 +40,7 @@ export const BlockDropArt = {
       // sparkle dot
       const dot = CasualArt.fill(CasualArt.sdCircle(p, new V2(0.55, 0.52), 0.09), px);
       let c = new Color(v, v, v, 1);
-      c = Color.lerp(c, new Color(1.6, 1.6, 1.6, 1), gloss * 0.5);
+      c = Color.lerp(c, Color.white, gloss * 0.75);
       c = Color.lerp(c, new Color(2, 2, 2, 1), dot * 0.9);
       return new Color(Math.min(1, c.r), Math.min(1, c.g), Math.min(1, c.b), a);
     });

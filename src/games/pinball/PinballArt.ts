@@ -246,6 +246,13 @@ export function PlayfieldSprite(t: Table) {
     ctx.beginPath(); ctx.moveTo(X(Spinner.x0), Y(Spinner.y)); ctx.lineTo(X(Spinner.x1), Y(Spinner.y)); ctx.stroke();
     // flipper pivot plates
     for (const s of [-1, 1]) post(ctx, X(1.95 * s), Y(-8.2), S(0.1));
+    // one-way gate over the shooter lane
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#dfe6ff";
+    ctx.lineWidth = S(0.07);
+    ctx.beginPath(); ctx.moveTo(X(4.62), Y(4.2)); ctx.lineTo(X(5.38), Y(4.85)); ctx.stroke();
+    ctx.restore();
     // plunger housing
     ctx.fillStyle = "#14102e";
     ctx.fillRect(X(4.62), Y(PlungerY - 0.75), S(0.76), S(TableBottom - (PlungerY - 0.75)) * -1);
@@ -274,9 +281,9 @@ export function RampSprite(t: Table) {
     t.rampL.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
     for (let i = t.rampR.length - 1; i >= 0; i--) ctx.lineTo(X(t.rampR[i][0]), Y(t.rampR[i][1]));
     ctx.closePath();
-    ctx.fillStyle = "rgba(120,255,170,0.16)";
+    ctx.fillStyle = "rgba(120,255,170,0.09)";
     ctx.fill();
-    for (const side of [t.rampL, t.rampR]) stroke3(ctx, () => neonPath(ctx, side, X, Y), Neon.lime, 0.12 * ppu);
+    for (const side of [t.rampL, t.rampR]) stroke3(ctx, () => neonPath(ctx, side, X, Y), Neon.lime, 0.09 * ppu);
     // chevrons along the ramp
     for (let i = 4; i < RampCenter.length - 4; i += 5) {
       const a = RampCenter[i], b = RampCenter[i + 1];

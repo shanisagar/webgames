@@ -32,7 +32,7 @@ export function makeLayout(theme: number): Layout {
     while (ladders.length < 8 && tries++ < 500) {
       const from = 2 + rng.next(78), len = 12 + rng.next(30), to = from + len;
       if (to > 98 || !free(from) || !free(to) || rowOf(to) === rowOf(from)) continue;
-      if (ladders.some((l) => cross(l, { from, to }))) continue;
+      if (Math.abs(cellOf(from)[0] - cellOf(to)[0]) > 3 || ladders.some((l) => cross(l, { from, to }))) continue;
       ladders.push({ from, to });
       take(from, to);
     }
@@ -41,7 +41,7 @@ export function makeLayout(theme: number): Layout {
     while (snakes.length < nSnakes && tries++ < 500) {
       const from = 16 + rng.next(83), len = 8 + rng.next(24), to = from - len;
       if (to < 2 || !free(from) || !free(to) || rowOf(to) === rowOf(from)) continue;
-      if (snakes.some((s) => Math.abs(s.from - from) < 3 || cross(s, { from, to }))) continue;
+      if (Math.abs(cellOf(from)[0] - cellOf(to)[0]) > 4 || snakes.some((s) => Math.abs(s.from - from) < 3 || cross(s, { from, to }))) continue;
       snakes.push({ from, to });
       take(from, to);
     }

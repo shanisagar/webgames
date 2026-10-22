@@ -473,7 +473,7 @@ export class Engine {
     this.active = null;
     // make room at the top if the stack still reaches the spawn rows
     let top = this.stackHeight();
-    while (top > VISIBLE - 4) { this.clearBottom2(); top = this.stackHeight(); }
+    while (top > 10) { this.clearBottom2(); top = this.stackHeight(); }
     this.holdUsed = false;
     this.spawn();
   }

@@ -325,7 +325,11 @@ export class MazeMuncherGame extends ArcadeGame {
   // ------------------------------------------------------------------ build
 
   protected Build() {
-    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mazemuncher = this;
+    if (import.meta.env.DEV) {
+      const w = window as unknown as Record<string, unknown>;
+      w.__mazemuncher = this;
+      void import("./MazePromo").then((m) => { w.__mazePromo = m.renderMazePromo; });
+    }
     CasualLook.calm(this, 1.1, 0.25);
     this.world = new GameObject("MazeWorld", this.gameObject);
     this.bgCover = CasualLook.cover(this.world, BackSprite(), -910);
