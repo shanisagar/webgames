@@ -1,7 +1,9 @@
 import { Suspense, useEffect, useState } from "react";
 import { GAMES } from "./games";
 
-const currentId = () => decodeURIComponent(location.hash.replace(/^#\/?/, ""));
+/** Build with VITE_GAME=<id> to ship a single game that opens straight away (for embedding or previews). */
+const ONLY_GAME = import.meta.env.VITE_GAME as string | undefined;
+const currentId = () => ONLY_GAME ?? decodeURIComponent(location.hash.replace(/^#\/?/, ""));
 
 /** Hash routing (#/arrowpuzzle) so every game has its own link and GitHub Pages needs no server rewrites. */
 export default function App() {
