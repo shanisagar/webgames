@@ -98,3 +98,8 @@
 .adm .adm-snippet-bar button { flex: none; padding: 3px 12px; font-size: 13px; }
 .adm-snippet pre { margin: 0; padding: 12px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #bfe9f5; }
 .adm-embed .adm-games small { word-break: break-all; }
+.adm-views { display: flex; gap: 4px; }
+.adm .adm-views button { border: 0; background: transparent; color: var(--dim); padding: 6px 12px; border-radius: 8px; }
+.adm .adm-views button.on { color: #fff; background: var(--line); }
+.adm-catalogue { padding: 20px; max-width: 860px; }
+.adm-catalogue .adm-head p { max-width: 560px; margin-top: 6px; }
