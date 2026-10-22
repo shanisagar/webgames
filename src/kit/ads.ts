@@ -111,6 +111,8 @@ export const AdService = {
   isShowing: false,
   get active() { return backend !== null; },
   get ready() { return ready; },
+  /** True once a game has initialized ads (the provider and publisher can't change without a page reload). */
+  get started() { return initStarted; },
   get rewardedAvailable() { return ready && !AdService.isShowing && !!backend && backend.ready("rewarded"); },
   /** The web has no consent form of its own (AdSense shows Google's CMP when the site enables it). */
   privacyOptionsRequired: false,

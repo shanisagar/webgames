@@ -5,7 +5,10 @@ export interface GameEntry {
   name: string;
   tagline: string;
   genre: string;
-  image: string;
+  /** Square store icon (256px). */
+  icon: string;
+  /** Wide feature graphic (1024x500) for the showcase hero, when the game has one. */
+  feature?: string;
   description: string;
   /** Code-split: a game's code (and Phaser) only downloads when it is opened. */
   component: LazyExoticComponent<ComponentType>;
@@ -18,7 +21,7 @@ export const GAMES: GameEntry[] = [
     name: "Slide 2048",
     tagline: "Swipe. Merge. Reach 2048!",
     genre: "Puzzle",
-    image: "img/icons/slide2048.webp",
+    icon: "img/icons/slide2048.webp",
     description: "The classic number-sliding puzzle: swipe to slide every tile, merge equal numbers and chase the 2048 tile.",
     component: lazy(() => import("./games/slide2048")),
   },
@@ -27,7 +30,8 @@ export const GAMES: GameEntry[] = [
     name: "Arrow Puzzle",
     tagline: "Tap. Launch. Clear the grid.",
     genre: "Puzzle",
-    image: "img/features/arrowpuzzle.webp",
+    icon: "img/icons/arrowpuzzle.webp",
+    feature: "img/features/arrowpuzzle.webp",
     description:
       "Minimal neon logic puzzle where each arrow flies off the board only if its path is clear. 100 hand-tuned levels, then endless generated ones that are always solvable.",
     component: lazy(() => import("./games/arrowpuzzle/ui/ArrowPuzzle")),

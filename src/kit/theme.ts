@@ -32,22 +32,37 @@ export interface ClientAds {
   graceRuns?: number;
 }
 
+/** Portal copy shown around the games. */
+export interface ClientSite {
+  headline?: string;
+  tagline?: string;
+  footer?: string;
+  /** Where the logo / "back" link points, e.g. the operator's own site. */
+  homeUrl?: string;
+}
+
 export interface ClientConfig {
   slug: string;
   name: string;
   theme: ClientTheme;
   ads: ClientAds;
+  site?: ClientSite;
   /** Enabled game ids in display order (null = all games). */
   games: string[] | null;
 }
 
 let current: ClientConfig | null = null;
+// Studio defaults, restored when the portal switches clients (or leaves client mode) without a page reload.
+const defaultAds = { ...AdConfig };
+const defaultPal = { Panel: Pal.Panel, Text: Pal.Text, TextDim: Pal.TextDim };
 
 const col = (hex: string | undefined) => (hex && /^#[0-9a-f]{6}$/i.test(hex) ? Pal.hex(parseInt(hex.slice(1), 16)) : null);
 
 /** Sets the active client (portal) before games boot. */
 export function setClient(c: ClientConfig | null) {
   current = c;
+  Object.assign(AdConfig, defaultAds);
+  Object.assign(Pal, defaultPal);
   const a = c?.ads;
   if (a) {
     if (a.provider) AdConfig.provider = a.provider;
