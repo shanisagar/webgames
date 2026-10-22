@@ -1,8 +1,13 @@
 name: Deploy
 
+# The live site is built from main. The dev branch is built into <site>/dev/ as a preview: every push to dev runs
+# the Check workflow, and when that passes this workflow redeploys both.
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -16,9 +21,12 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'dev' && github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -33,6 +41,16 @@ jobs:
           VITE_POSTHOG_HOST: ${{ vars.VITE_POSTHOG_HOST }}
           VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           VITE_RELEASE: ${{ github.sha }}
+      # Dev preview: the dev branch with every game folder playable at #/dev. Never blocks the live site.
+      - name: Build dev preview
+        continue-on-error: true
+        run: |
+          git fetch --depth=1 origin dev || { echo "No dev branch: skipping."; exit 0; }
+          git worktree add ../devsrc FETCH_HEAD
+          cd ../devsrc
+          # Reuse main's packages unless dev changed them.
+          if cmp -s package-lock.json "$GITHUB_WORKSPACE/package-lock.json"; then ln -s "$GITHUB_WORKSPACE/node_modules" node_modules; else npm ci; fi
+          VITE_DEV_PREVIEW=1 VITE_RELEASE="dev-$(git rev-parse --short HEAD)" npx vite build --outDir "$GITHUB_WORKSPACE/dist/dev" --emptyOutDir
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

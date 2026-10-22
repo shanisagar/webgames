@@ -30,6 +30,8 @@ self.addEventListener("fetch", (e) => {
   const sameOrigin = url.origin === self.location.origin;
   const font = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
   if (!sameOrigin && !font) return;
+  // The dev preview site (<site>/dev/) has its own worker and cache.
+  if (sameOrigin && url.pathname.startsWith(new URL("./dev/", self.location).pathname)) return;
 
   if (req.mode === "navigate") {
     e.respondWith(
