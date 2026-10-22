@@ -17,6 +17,15 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "mahjongcalm",
+    name: "Mahjong Calm",
+    tagline: "Match the tiles. Clear the board.",
+    genre: "Puzzle",
+    icon: "img/icons/mahjongcalm.webp",
+    description: "Classic Mahjong Solitaire with twelve layouts from Pyramid to the Turtle. Match free pairs, use hints, undo and shuffles, and relax to calm music. Every deal is solvable.",
+    component: lazy(() => import("./games/mahjongcalm")),
+  },
+  {
     id: "carescape",
     name: "Car Escape",
     tagline: "Tap. Drive out. Clear the lot.",
