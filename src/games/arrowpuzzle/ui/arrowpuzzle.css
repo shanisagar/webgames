@@ -1,0 +1,146 @@
+/* Arrow Puzzle screens. Sizes scale with the shorter screen side (like the Unity canvas scaler). */
+.ap-root {
+  --u: min(1vh * 0.052, 1vw * 0.092);         /* 1 Unity reference px ≈ 1/1080 of a portrait screen */
+  position: fixed; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+  background: var(--bg); color: var(--text);
+  font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif; font-weight: 700; letter-spacing: 0.06em;
+  -webkit-tap-highlight-color: transparent;
+}
+.ap-bg, .ap-board { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ap-board canvas { display: block; }
+.ap-vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  box-shadow: inset 0 0 calc(220 * var(--u)) calc(40 * var(--u)) var(--danger); }
+.ap-vignette.ap-hit { animation: ap-hit 0.45s ease-out; }
+@keyframes ap-hit { from { opacity: 0.55; } to { opacity: 0; } }
+
+.ap-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.ap-fade { animation: ap-fade 0.25s ease-out; }
+@keyframes ap-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- buttons ---------- */
+.ap-btn { font: inherit; letter-spacing: 0.08em; cursor: pointer; border-radius: 999px; display: inline-flex; align-items: center;
+  justify-content: center; gap: 0.4em; transition: transform 0.12s, box-shadow 0.2s, background 0.2s, opacity 0.2s; pointer-events: auto; }
+.ap-btn:active:not(:disabled) { transform: scale(0.94); }
+.ap-btn:disabled { opacity: 0.35; cursor: default; }
+.ap-btn:focus-visible { outline: 2px solid var(--accent2); outline-offset: 3px; }
+.ap-btn-primary { background: var(--accent); color: var(--bg); border: 2px solid color-mix(in srgb, var(--accent) 50%, white);
+  box-shadow: 0 0 calc(40 * var(--u)) color-mix(in srgb, var(--accent) 45%, transparent); }
+.ap-btn-outline, .ap-btn-icon { background: color-mix(in srgb, var(--panel) 70%, transparent); color: var(--text);
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 0 calc(24 * var(--u)) color-mix(in srgb, var(--accent) 18%, transparent); }
+.ap-btn-danger { background: transparent; color: var(--danger); border: 2px solid var(--danger); }
+.ap-btn-outline, .ap-btn-danger { font-size: calc(40 * var(--u)); padding: 0.55em 1.2em; min-width: calc(300 * var(--u)); }
+.ap-btn-primary { font-size: calc(48 * var(--u)); padding: 0.5em 1.3em; }
+.ap-btn-icon { width: calc(120 * var(--u)); height: calc(120 * var(--u)); padding: 0; color: var(--accent); }
+.ap-btn-icon svg { width: 46%; height: 46%; }
+.ap-btn-icon.ap-big { width: calc(150 * var(--u)); height: calc(150 * var(--u)); }
+.ap-ico { width: 1em; height: 1em; }
+.ap-row { display: flex; gap: calc(40 * var(--u)); justify-content: center; }
+.ap-wide { min-width: calc(620 * var(--u)); }
+
+/* ---------- menu ---------- */
+.ap-menu { justify-content: space-between; text-align: center; }
+.ap-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); }
+.ap-menu > * { position: relative; }
+.ap-menu-title { margin-top: 12vh; }
+.ap-title-a { margin: 0; font-family: "Orbitron", sans-serif; font-weight: 900; font-size: calc(170 * var(--u)); line-height: 1;
+  color: var(--accent); text-shadow: 0 0 calc(30 * var(--u)) color-mix(in srgb, var(--accent) 70%, transparent), 0 0 4px #fff6;
+  animation: ap-breathe 2.85s ease-in-out infinite; }
+.ap-title-b { margin: calc(20 * var(--u)) 0 0; font-family: "Orbitron", sans-serif; font-weight: 700; font-size: calc(112 * var(--u)); line-height: 1;
+  color: var(--text); text-shadow: 0 0 calc(24 * var(--u)) color-mix(in srgb, var(--accent2) 60%, transparent); letter-spacing: 0.12em; }
+@keyframes ap-breathe { 50% { color: color-mix(in srgb, var(--accent) 75%, white); } }
+.ap-love { margin: calc(40 * var(--u)) 0 0; font-size: calc(34 * var(--u)); font-weight: 500; color: var(--text-dim); }
+.ap-line { width: calc(520 * var(--u)); height: 4px; margin: calc(40 * var(--u)) auto 0; background: var(--accent2);
+  box-shadow: 0 0 12px var(--accent2); }
+.ap-menu-actions { display: flex; flex-direction: column; align-items: center; gap: calc(50 * var(--u)); }
+.ap-level-info { margin: 0; font-size: calc(44 * var(--u)); }
+.ap-play { font-size: calc(72 * var(--u)); min-width: calc(660 * var(--u)); padding: 0.4em 1em; }
+.ap-menu-footer { margin-bottom: 5vh; font-size: calc(34 * var(--u)); font-weight: 500; color: var(--text-dim); }
+.ap-menu-footer p { margin: calc(12 * var(--u)) 0; }
+.ap-faint { opacity: 0.5; font-size: calc(26 * var(--u)); }
+
+/* ---------- HUD ---------- */
+.ap-hud { pointer-events: none; justify-content: space-between; }
+.ap-top { position: relative; width: 100%; height: 16%; display: flex; flex-direction: column; align-items: center; padding-top: calc(28 * var(--u)); }
+.ap-corner-l, .ap-corner-r { position: absolute; top: calc(40 * var(--u)); }
+.ap-corner-l { left: calc(45 * var(--u)); }
+.ap-corner-r { right: calc(45 * var(--u)); }
+.ap-levels .ap-corner-l { top: calc(40 * var(--u) + env(safe-area-inset-top)); }
+.ap-level { font-family: "Orbitron", sans-serif; font-size: calc(64 * var(--u)); text-shadow: 0 0 12px #fff3; }
+.ap-pill { margin-top: calc(8 * var(--u)); font-size: calc(28 * var(--u)); padding: 0.1em 1em; border: 2px solid; border-radius: 999px; }
+.ap-status { display: flex; gap: calc(70 * var(--u)); align-items: center; margin-top: calc(18 * var(--u)); }
+.ap-hearts { display: flex; gap: calc(14 * var(--u)); }
+.ap-hearts.ap-shake { animation: ap-shake 0.4s linear; }
+@keyframes ap-shake { 20% { transform: translateX(10px); } 40% { transform: translateX(-8px); } 60% { transform: translateX(6px); } 80% { transform: translateX(-3px); } }
+.ap-heart { width: calc(62 * var(--u)); height: calc(62 * var(--u)); color: var(--danger); filter: drop-shadow(0 0 6px var(--danger)); transition: color 0.3s; }
+.ap-heart.ap-lost { color: rgba(255, 255, 255, 0.12); filter: none; }
+.ap-heart.ap-pop { animation: ap-pop 0.5s linear; }
+@keyframes ap-pop { 30% { transform: scale(1.6) rotate(18deg); } 60% { transform: scale(1.3) rotate(-12deg); } }
+.ap-count { display: flex; align-items: center; gap: 0.3em; font-size: calc(48 * var(--u)); }
+.ap-count-ico { width: 0.9em; height: 0.9em; color: var(--accent); }
+.ap-tutorial { position: absolute; bottom: calc(14% + 40 * var(--u)); left: 5%; right: 5%; text-align: center;
+  font-size: calc(36 * var(--u)); text-shadow: 0 0 10px #000; animation: ap-blink 2.85s ease-in-out infinite; }
+@keyframes ap-blink { 50% { opacity: 0.55; } }
+.ap-bottom { width: 100%; height: 14%; display: flex; justify-content: center; align-items: center; gap: calc(100 * var(--u)); }
+.ap-tool { position: relative; display: flex; flex-direction: column; align-items: center; gap: calc(10 * var(--u)); }
+.ap-tool-label { font-size: calc(26 * var(--u)); color: var(--text-dim); }
+.ap-badge { position: absolute; top: calc(-8 * var(--u)); right: calc(-8 * var(--u)); min-width: calc(62 * var(--u)); height: calc(62 * var(--u));
+  border-radius: 999px; background: var(--accent2); color: var(--bg); font-size: calc(34 * var(--u)); display: grid; place-items: center;
+  box-shadow: 0 0 10px var(--accent2); }
+
+/* ---------- cards (win / lose / settings) ---------- */
+.ap-modal { justify-content: center; background: rgba(0, 0, 0, 0.45); }
+.ap-card { width: min(92vw, calc(900 * var(--u))); max-height: 94vh; overflow: auto; display: flex; flex-direction: column; align-items: center;
+  gap: calc(30 * var(--u)); padding: calc(60 * var(--u)) calc(40 * var(--u)); background: var(--panel); border-radius: calc(44 * var(--u));
+  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 calc(80 * var(--u)) color-mix(in srgb, var(--accent) 25%, transparent); text-align: center;
+  animation: ap-card-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes ap-card-in { from { transform: scale(0.85); opacity: 0; } }
+.ap-card-title { margin: 0; font-family: "Orbitron", sans-serif; font-size: calc(68 * var(--u)); text-shadow: 0 0 18px currentColor; }
+.ap-dim-text { margin: 0; color: var(--text-dim); font-size: calc(36 * var(--u)); }
+.ap-stars { display: flex; align-items: flex-end; gap: calc(40 * var(--u)); margin: calc(20 * var(--u)) 0; }
+.ap-star { width: calc(160 * var(--u)); height: calc(160 * var(--u)); color: rgba(255, 255, 255, 0.1); }
+.ap-star-mid { width: calc(190 * var(--u)); height: calc(190 * var(--u)); margin-bottom: calc(30 * var(--u)); }
+.ap-star.ap-star-on { color: var(--success); filter: drop-shadow(0 0 12px var(--success)); transform: scale(0);
+  animation: ap-star-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+@keyframes ap-star-in { to { transform: scale(1); } }
+.ap-stats { margin: 0; font-size: calc(38 * var(--u)); font-weight: 500; }
+.ap-love-note { margin: 0; font-size: calc(36 * var(--u)); font-style: italic; color: var(--accent2); text-shadow: 0 0 10px color-mix(in srgb, var(--accent2) 50%, transparent); }
+.ap-bonus { margin: 0; color: var(--success); font-size: calc(30 * var(--u)); }
+.ap-lose-heart { width: calc(190 * var(--u)); height: calc(190 * var(--u)); color: var(--danger); filter: drop-shadow(0 0 20px var(--danger));
+  animation: ap-beat 1.2s ease-in-out infinite; }
+@keyframes ap-beat { 15% { transform: scale(1.12); } 30% { transform: scale(1); } }
+
+.ap-settings { gap: calc(36 * var(--u)); }
+.ap-setting { width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: calc(42 * var(--u)); padding: 0 calc(30 * var(--u)); }
+.ap-toggle { min-width: calc(230 * var(--u)); font-size: calc(40 * var(--u)); padding: 0.35em 0.8em; }
+.ap-theme-pick { display: flex; align-items: center; gap: calc(16 * var(--u)); }
+.ap-theme-pick .ap-btn-icon { width: calc(90 * var(--u)); height: calc(90 * var(--u)); }
+.ap-theme-name { display: flex; flex-direction: column; align-items: center; min-width: calc(260 * var(--u)); font-size: calc(38 * var(--u)); }
+.ap-swatches { display: flex; gap: 6px; margin-top: 6px; }
+.ap-swatches i { width: calc(30 * var(--u)); height: calc(30 * var(--u)); border-radius: 50%; }
+
+/* ---------- level select ---------- */
+.ap-levels { background: color-mix(in srgb, var(--bg) 94%, transparent); justify-content: space-evenly; }
+.ap-levels-title { margin: 0; font-family: "Orbitron", sans-serif; font-size: calc(76 * var(--u)); color: var(--accent); text-shadow: 0 0 18px var(--accent); }
+.ap-level-grid { display: grid; grid-template-columns: repeat(4, calc(205 * var(--u))); gap: calc(30 * var(--u)); }
+.ap-level-cell { min-width: 0; width: calc(205 * var(--u)); height: calc(205 * var(--u)); border-radius: calc(40 * var(--u)); padding: 0;
+  flex-direction: column; gap: calc(6 * var(--u)); font-size: calc(64 * var(--u)); }
+.ap-level-cell.ap-current { border-color: var(--accent2); box-shadow: 0 0 calc(30 * var(--u)) color-mix(in srgb, var(--accent2) 50%, transparent); }
+.ap-level-cell:disabled { opacity: 1; color: var(--text-dim); border-color: rgba(255, 255, 255, 0.12); box-shadow: none; }
+.ap-lock { width: calc(80 * var(--u)); height: calc(80 * var(--u)); }
+.ap-level-num { line-height: 1; }
+.ap-cell-stars { display: flex; gap: calc(6 * var(--u)); }
+.ap-cell-stars svg { width: calc(38 * var(--u)); height: calc(38 * var(--u)); color: rgba(255, 255, 255, 0.12); }
+.ap-cell-stars svg.ap-star-on { color: var(--success); }
+.ap-pager { display: flex; align-items: center; gap: calc(60 * var(--u)); font-size: calc(40 * var(--u)); }
+
+/* ---------- toast ---------- */
+.ap-toast { position: absolute; left: 50%; top: 18%; transform: translate(-50%, -10px); max-width: 88vw; padding: 0.6em 1.2em;
+  border-radius: 999px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  font-size: calc(32 * var(--u)); text-align: center; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 5; }
+.ap-toast.ap-toast-on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ap-title-a, .ap-tutorial, .ap-lose-heart { animation: none; }
+}
