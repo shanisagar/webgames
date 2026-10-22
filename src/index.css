@@ -79,3 +79,16 @@ body { background: #0b0d17; color: #e7e9f3; font-family: "Rajdhani", system-ui, 
 .notice h1 { font: 800 30px "Rajdhani", sans-serif; margin: 0 0 8px; }
 .notice p { color: #9aa0b8; font-size: 17px; white-space: pre-wrap; }
 .notice a { color: #22d3ee; font-weight: 700; }
+
+/* ------------------------------------------------------------------ studio game detail */
+.detail { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: center;
+  padding: 28px max(16px, calc((100% - 1200px) / 2)) 0; }
+.detail-art img { display: block; width: 100%; border-radius: 22px; box-shadow: 0 24px 50px -24px rgba(0, 0, 0, 0.8); }
+.detail-art .detail-icon-big { max-width: 360px; margin: 0 auto; }
+.detail-icon { display: block; border-radius: 22px; margin-bottom: 14px; }
+.detail-copy h1 { margin: 4px 0 6px; font: 800 clamp(30px, 4.5vw, 46px)/1.05 var(--font); }
+.detail-tagline { margin: 0 0 12px; font-size: 19px; font-weight: 700; color: var(--accent); }
+.detail-copy p { line-height: 1.5; opacity: 0.85; }
+.detail-facts { margin: 14px 0 22px; padding-left: 20px; line-height: 1.8; opacity: 0.85; }
+.detail-note { font-weight: 700; color: var(--accent); }
+@media (max-width: 760px) { .detail { grid-template-columns: 1fr; gap: 18px; } }

@@ -9,6 +9,8 @@ export const STUDIO = {
   headline: "Games that load before you blink.",
   tagline: "Arcade, puzzle and casual hits built for the browser. No installs, no waiting: tap and play on any phone or desktop.",
   footer: "© Shani Sagar Games. All games run in your browser.",
+  /** Where "Request a demo" goes (set VITE_CONTACT_EMAIL at build time). */
+  contactEmail: (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ?? "",
 };
 
 export interface Branding {
@@ -47,7 +49,11 @@ export function themeVars(t?: ClientTheme): CSSProperties {
   return v as CSSProperties;
 }
 
-export function Showcase({ games, brand }: { games: GameEntry[]; brand: Branding }) {
+/**
+ * Game list. Client portals are playable; the studio site (playable=false) is a showcase: cards open a detail page
+ * and games only play inside a client portal or embed, with that client's enabled games.
+ */
+export function Showcase({ games, brand, playable = true }: { games: GameEntry[]; brand: Branding; playable?: boolean }) {
   const [genre, setGenre] = useState("All");
   const [query, setQuery] = useState("");
   useEffect(() => { document.title = brand.name; updateManifest(brand.name, brand.name); }, [brand.name]);
@@ -56,7 +62,7 @@ export function Showcase({ games, brand }: { games: GameEntry[]; brand: Branding
   const shown = games.filter((g) =>
     (genre === "All" || g.genre === genre) &&
     (!query || `${g.name} ${g.genre} ${g.tagline}`.toLowerCase().includes(query.toLowerCase())));
-  const recentGames = recent().map((id) => games.find((g) => g.id === id)).filter((g): g is GameEntry => !!g).slice(0, 6);
+  const recentGames = !playable ? [] : recent().map((id) => games.find((g) => g.id === id)).filter((g): g is GameEntry => !!g).slice(0, 6);
   const featured = games.filter((g) => g.feature).slice(0, 5);
   const [slide, setSlide] = useState(0);
   useEffect(() => {
@@ -83,7 +89,7 @@ export function Showcase({ games, brand }: { games: GameEntry[]; brand: Branding
           <p>{brand.tagline}</p>
           {hero && (
             <a className="site-cta" href={`${brand.base}${hero.id}`}>
-              Play {hero.name} <span aria-hidden>→</span>
+              {playable ? "Play" : "Discover"} {hero.name} <span aria-hidden>→</span>
             </a>
           )}
           {featured.length > 1 && (

@@ -8,8 +8,7 @@ The back office has an **Embed** tab for each client with ready-made snippets fo
 
 | URL (after the site address, e.g. `https://<user>.github.io/webgames/`) | Shows |
 | --- | --- |
-| `#/embed/<game>` | One game, full-bleed. No site header, no home or "all games" buttons. |
-| `#/embed/<game>?client=<slug>` | The game with the client's theme, font and ads. If the client is switched off or doesn't have the game enabled, a short "not available" note shows instead. |
+| `#/embed/<game>?client=<slug>` | One game, full-bleed, with the client's theme, font and ads. No site header, no home or "all games" buttons. The client is required: without it, or if the client is switched off or doesn't have the game enabled, a short "not available" note shows instead. |
 | `#/embed/portal/<slug>` | The client's whole portal. Games inside it go back to the embedded list. |
 | `…?sound=0` / `…&sound=0` | Start muted. |
 
@@ -31,7 +30,7 @@ Query parameters go after `?` inside the hash. Game ids are the `id`s in `src/ga
 <script>
   const game = WebGames.mount(document.getElementById("webgame"), {
     game: "slide2048",        // or portal: "demo"
-    client: "demo",           // optional: theme + ads of this client
+    client: "demo",           // required: your client address (theme, ads and the games enabled for you)
     sound: true,              // false = start muted
     onEvent: (e) => console.log(e),
   });

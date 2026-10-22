@@ -95,7 +95,7 @@ function Preview({ target, sound }: { target: EmbedTarget; sound: boolean }) {
 export default function EmbedDocs() {
   useEffect(() => { document.title = `Embed our games · ${STUDIO.name}`; }, []);
   const [gameId, setGameId] = useState("slide2048");
-  const [client, setClientSlug] = useState("");
+  const [client, setClientSlug] = useState("demo");
   const [sound, setSound] = useState(true);
   const [filter, setFilter] = useState("");
   const base = siteBase();
@@ -128,7 +128,7 @@ export default function EmbedDocs() {
                 {GAMES.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </label>
-            <label>Client address (optional)
+            <label>Client address
               <input value={client} placeholder="e.g. demo" onChange={(e) => setClientSlug(e.target.value.replace(/[^a-z0-9-]/gi, ""))} />
             </label>
             <label className="ed-check"><input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} /> Sound on start</label>
@@ -156,7 +156,7 @@ export default function EmbedDocs() {
             <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
             <tbody>
               <tr><td><code>game</code> or <code>portal</code></td><td>A game id (see the list below) or your portal address.</td></tr>
-              <tr><td><code>client</code></td><td>Your client address, for your theme and ads (with <code>game</code>).</td></tr>
+              <tr><td><code>client</code></td><td>Required with <code>game</code>: your client address. Only games enabled for you play, with your theme and ads.</td></tr>
               <tr><td><code>sound</code></td><td><code>false</code> starts muted. Default <code>true</code>.</td></tr>
               <tr><td><code>onEvent(e)</code></td><td>Called with every game event (below).</td></tr>
               <tr><td><code>title</code>, <code>height</code></td><td>The iframe's accessible title; a height used only when your element has none (default <code>min(80vh, 720px)</code>).</td></tr>

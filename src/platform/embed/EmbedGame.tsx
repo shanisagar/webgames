@@ -28,7 +28,8 @@ export function EmbedGame({ gameId, slug }: { gameId: string; slug: string | nul
       setState({ status: "ok", client });
     };
     if (!game) { setState({ status: "unavailable", text: "This game is not available." }); return; }
-    if (!slug) { apply(null); return; }
+    // Games are licensed per client: an embed must name an active client that has this game switched on.
+    if (!slug) { setState({ status: "unavailable", text: "This game is not available here." }); return; }
     setState({ status: "loading" });
     loadPortal(slug)
       .then((client) => {
