@@ -17,6 +17,15 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "poolpro",
+    name: "Pool Pro",
+    tagline: "8-ball hustle around the world.",
+    genre: "Sports",
+    icon: "img/icons/poolpro.webp",
+    description: "Realistic 8-ball pool against smart CPU rivals in eight cities from London to Monaco. Aim with guide lines, add spin, win coins and climb to the high-stakes tables.",
+    component: lazy(() => import("./games/poolpro")),
+  },
+  {
     id: "emberripple",
     name: "Ember & Ripple",
     tagline: "Two elements. One temple.",
