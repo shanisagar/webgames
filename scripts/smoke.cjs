@@ -21,7 +21,7 @@ const seconds = Number(secondsArg);
     await page.screenshot({ path: `${outDir}/${folder}-${name}-1-title.png` });
     // press the title screen's primary button (PLAY or the game's PlayLabel)
     const play = await page.evaluate(() => {
-      const t = [...document.querySelectorAll('[data-n="Title"] .na-txt span')].find((s) => s.offsetParent && /PLAY|START|GO|RACE|BEGIN|INFILTRATE/i.test(s.textContent || "") && !/HOW TO/i.test(s.textContent || ""));
+      const t = [...document.querySelectorAll('[data-n="Title"] .na-txt span')].find((s) => s.offsetParent && s.closest(".na-button") && /PLAY|START|GO|RACE|BEGIN|INFILTRATE/i.test(s.textContent || "") && !/HOW TO/i.test(s.textContent || ""));
       if (!t) return null;
       const r = t.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, label: t.textContent };

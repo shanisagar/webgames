@@ -1,5 +1,5 @@
 import {
-  ArcadeButton, ArcadeGame, Art, Color, Fmt, GameInfo, GameObject, howTo, Image, LoopSource, Mathf, Mesh, Pal, Phase, Quaternion,
+  ArcadeButton, ArcadeGame, Art, Color, Fmt, GameInfo, GameObject, howTo, Image, LoopSource, Mathf, Pal, Phase, Quaternion,
   Random, Rect, Result, Settings, Sfx, Snd, SpriteRenderer, Text, TextAnchor, Time, TouchScheme, UIKit, UILine, UINode, V2, V3,
 } from "../../kit";
 import { Track } from "./Track";
@@ -50,33 +50,6 @@ const Roster: { name: string; color: number; skill: number; aggro: number; line:
   { name: "ECHO", color: 0xe45cff, skill: 0.95, aggro: 0.5, line: 0.85, boost: 0.4 },
   { name: "KITE", color: 0xffc84a, skill: 0.94, aggro: 0.6, line: 0.9, boost: 0.6 },
 ];
-
-/**
- * Kit gap: MeshRenderer fills each triangle flat with its first vertex colour, so Track.BuildRoadMesh's edge → middle
- * gradient renders as a sawtooth. Same road, cut into bands across its width; both triangles of a band quad start on
- * the same column, whose colour is the gradient sampled at the band centre.
- */
-function RoadMeshForKit(track: Track, edge: Color, middle: Color, bands = 8) {
-  const m = track.Count, cols = bands + 1;
-  const verts: V3[] = [], colors: Color[] = [], tris: number[] = [];
-  for (let i = 0; i < m; i++)
-    for (let k = 0; k < cols; k++) {
-      const side = (k / bands) * 2 - 1, band = Math.min(k, bands - 1), mid = ((band + 0.5) / bands) * 2 - 1;
-      verts.push(track.Center[i].add(track.Normal[i].mul(Track.Width * 0.5 * side)).toV3());
-      colors.push(Color.lerp(middle, edge, Math.abs(mid)));
-    }
-  for (let i = 0; i < m; i++) {
-    const a = i * cols, b = ((i + 1) % m) * cols;
-    for (let k = 0; k < bands; k++) tris.push(a + k, b + k, a + k + 1, b + k, b + k + 1, a + k + 1);
-  }
-  const mesh = new Mesh();
-  mesh.name = "Road";
-  mesh.vertices = verts;
-  mesh.colors = colors;
-  mesh.triangles = tris;
-  mesh.markDirty();
-  return mesh;
-}
 
 /** Application.isMobilePlatform (kit gap: no equivalent in the kit). */
 const isMobilePlatform = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -197,7 +170,7 @@ export class VoltraceGame extends ArcadeGame {
 
     const track = (this.track = Track.Generate(attractMode ? Random.rangeInt(0, 99999) : this.league * 7919 + this.raceCount * 131 + 17, attractMode ? 2 : this.league));
     const trackRoot = (this.trackRoot = new GameObject("Track", this.world));
-    Art.meshObject(trackRoot, "Road", RoadMeshForKit(track, new Color(0.12, 0.1, 0.3, 0.95), new Color(0.06, 0.06, 0.16, 0.95)), Art.Flat, 1);
+    Art.meshObject(trackRoot, "Road", track.BuildRoadMesh(new Color(0.12, 0.1, 0.3, 0.95), new Color(0.06, 0.06, 0.16, 0.95)), Art.Flat, 1);
     const left = Art.line(trackRoot, "Edge L", this.Info.Accent2.withAlpha(0.9), 0.22, 3, true);
     const lp = track.EdgePoints(-1);
     left.positionCount = lp.length;

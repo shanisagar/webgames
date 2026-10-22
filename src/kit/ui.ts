@@ -598,6 +598,7 @@ export class ArcadeButton {
   constructor(readonly node: UINode) {
     node.button = this;
     const el = node.el;
+    el.classList.add("na-button");
     el.addEventListener("pointerdown", (e) => { this.held = true; if (this._interactable) this.target = 0.93; e.stopPropagation(); });
     el.addEventListener("pointerup", () => { this.held = false; this.target = 1; });
     el.addEventListener("pointerleave", () => { this.held = false; this.target = 1; });

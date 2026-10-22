@@ -270,7 +270,7 @@ export class Mesh {
   recalculateBounds() { /* not needed */ }
 }
 
-/** Draws a Mesh as flat-coloured triangles (vertex colour of the first corner, alpha averaged). */
+/** Draws a Mesh as triangles with interpolated vertex colours. */
 export class MeshRenderer extends Renderer {
   mesh: Mesh | null = null;
   material: Material | null = null;
@@ -290,12 +290,19 @@ export class MeshRenderer extends Renderer {
     if (mesh.version !== this.drawnVersion || key !== this.drawnKey) {
       g.clear();
       const v = mesh.vertices, cols = mesh.colors, t = mesh.triangles;
+      const tint = this.color, ta = this.color.a;
       for (let i = 0; i + 2 < t.length; i += 3) {
-        const c = cols.length ? cols[t[i]] : Color.white;
-        const a = cols.length ? (cols[t[i]].a + cols[t[i + 1]].a + cols[t[i + 2]].a) / 3 : 1;
-        const tint = c.mul(this.color);
-        g.fillStyle(tint.rgbInt, Mathf.clamp01(a * this.color.a));
         const p0 = v[t[i]], p1 = v[t[i + 1]], p2 = v[t[i + 2]];
+        if (!cols.length) {
+          g.fillStyle(tint.rgbInt, Mathf.clamp01(ta));
+        } else {
+          // Vertex colours are interpolated like Unity's: WebGL Graphics gives a triangle's corners the TL/TR/BL tints.
+          const c0 = cols[t[i]], c1 = cols[t[i + 1]], c2 = cols[t[i + 2]];
+          const k0 = c0.mul(tint).rgbInt, k1 = c1.mul(tint).rgbInt, k2 = c2.mul(tint).rgbInt;
+          const a0 = Mathf.clamp01(c0.a * ta), a1 = Mathf.clamp01(c1.a * ta), a2 = Mathf.clamp01(c2.a * ta);
+          if (k0 === k1 && k1 === k2 && a0 === a1 && a1 === a2) g.fillStyle(k0, a0);
+          else g.fillGradientStyle(k0, k1, k2, k2, a0, a1, a2, a2);
+        }
         g.fillTriangle(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y);
       }
       this.drawnVersion = mesh.version;
