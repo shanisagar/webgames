@@ -1,34 +1,3 @@
 {
-  "off": [
-    "mahjongcalm",
-    "carescape",
-    "wordwonder",
-    "lumiloop",
-    "puttpal",
-    "elixirlab",
-    "skyfire",
-    "untwine",
-    "pixelcross",
-    "melodytiles",
-    "bubblebloom",
-    "brickbounce",
-    "flapflock",
-    "ghostline",
-    "neuralsiege",
-    "voltrace",
-    "firewall",
-    "swarmbreaker",
-    "bladetoss",
-    "skystack",
-    "hoopshot",
-    "boltjam",
-    "hexasort",
-    "minemeadow",
-    "tilegarden",
-    "sudokuzen",
-    "fourup",
-    "fruitfusion",
-    "prismblocks",
-    "linklines"
-  ]
+  "off": []
 }
