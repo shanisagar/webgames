@@ -1,4 +1,9 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { reloadForUpdate } from "./platform/update";
+
+/** Lazy game chunk. A page opened before a new deploy asks for chunks that no longer exist: reload once to update. */
+const load = (fn: () => Promise<{ default: ComponentType }>) =>
+  lazy(() => fn().catch((err) => (reloadForUpdate() ? new Promise<never>(() => {}) : Promise.reject(err))));
 
 export interface GameEntry {
   id: string;
@@ -24,7 +29,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/dashrush.webp",
     feature: "img/features/dashrush.webp",
     description: "An endless 3-lane runner through a sunny rail yard: dodge trains and barriers, run on train roofs, grab magnets, shields and sky boosts, and unlock new runners.",
-    component: lazy(() => import("./games/dashrush")),
+    component: load(() => import("./games/dashrush")),
   },
   {
     id: "holehungry",
@@ -34,7 +39,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/holehungry.webp",
     feature: "img/features/holehungry.webp",
     description: "Steer a hungry hole through a busy city and swallow people, cars, trees and towers to grow. Outgrow six rival holes in 2-minute rounds, or clear the whole city solo. Unlock new rims.",
-    component: lazy(() => import("./games/holehungry")),
+    component: load(() => import("./games/holehungry")),
   },
   {
     id: "poolpro",
@@ -43,7 +48,7 @@ export const GAMES: GameEntry[] = [
     genre: "Sports",
     icon: "img/icons/poolpro.webp",
     description: "Realistic 8-ball pool against smart CPU rivals in eight cities from London to Monaco. Aim with guide lines, add spin, win coins and climb to the high-stakes tables.",
-    component: lazy(() => import("./games/poolpro")),
+    component: load(() => import("./games/poolpro")),
   },
   {
     id: "emberripple",
@@ -53,7 +58,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/emberripple.webp",
     feature: "img/features/emberripple.webp",
     description: "A two-hero puzzle platformer: guide fire spirit Ember and water spirit Ripple through 20 temple levels of lava, water, goo, levers, lifts and stones. Play together on one keyboard or swap between them on your phone.",
-    component: lazy(() => import("./games/emberripple")),
+    component: load(() => import("./games/emberripple")),
   },
   {
     id: "mahjongcalm",
@@ -62,7 +67,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/mahjongcalm.webp",
     description: "Classic Mahjong Solitaire with twelve layouts from Pyramid to the Turtle. Match free pairs, use hints, undo and shuffles, and relax to calm music. Every deal is solvable.",
-    component: lazy(() => import("./games/mahjongcalm")),
+    component: load(() => import("./games/mahjongcalm")),
   },
   {
     id: "carescape",
@@ -71,7 +76,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/carescape.webp",
     description: "A parking-jam puzzle: tap cars to drive them out of a packed lot in the right order. Trucks, cones, move limits and handy undo, hint and tow boosters.",
-    component: lazy(() => import("./games/carescape")),
+    component: load(() => import("./games/carescape")),
   },
   {
     id: "wordwonder",
@@ -81,7 +86,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/wordwonder.webp",
     feature: "img/features/wordwonder.webp",
     description: "Swipe letters on the wheel to fill the crossword and travel the world's wonders. Find bonus words, use hints and hammers, and keep your streak alive.",
-    component: lazy(() => import("./games/wordwonder")),
+    component: load(() => import("./games/wordwonder")),
   },
   {
     id: "candynova",
@@ -91,7 +96,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/candynova.webp",
     feature: "img/features/candynova.webp",
     description: "A sweet match-3 adventure: swap candies, build striped candies and Nova bombs, break ice and clear goals across galaxies of levels.",
-    component: lazy(() => import("./games/candynova")),
+    component: load(() => import("./games/candynova")),
   },
   {
     id: "lumiloop",
@@ -101,7 +106,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/lumiloop.webp",
     feature: "img/features/lumiloop.webp",
     description: "Steer a glowing comet and close loops around golden sparks to refuel your light, while hunters and cutters close in. Chain loops for big combos.",
-    component: lazy(() => import("./games/lumiloop")),
+    component: load(() => import("./games/lumiloop")),
   },
   {
     id: "snakebrawl",
@@ -111,7 +116,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/snakebrawl.webp",
     feature: "img/features/snakebrawl.webp",
     description: "Slither around the arena, eat candy to grow longer and trap rival snakes. Boost past them, climb the leaderboard and unlock new skins.",
-    component: lazy(() => import("./games/snakebrawl")),
+    component: load(() => import("./games/snakebrawl")),
   },
   {
     id: "puttpal",
@@ -120,7 +125,7 @@ export const GAMES: GameEntry[] = [
     genre: "Sports",
     icon: "img/icons/puttpal.webp",
     description: "Mini golf in 18 handcrafted holes with water, sand, bumpers and moving bars. Pull back, aim and sink it under par.",
-    component: lazy(() => import("./games/puttpal")),
+    component: load(() => import("./games/puttpal")),
   },
   {
     id: "elixirlab",
@@ -130,7 +135,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/elixirlab.webp",
     feature: "img/features/elixirlab.webp",
     description: "A colour-sorting potion puzzle: pour layers between flasks until every flask holds one colour. Mystery brews hide layers until you uncover them.",
-    component: lazy(() => import("./games/elixirlab")),
+    component: load(() => import("./games/elixirlab")),
   },
   {
     id: "skyfire",
@@ -140,7 +145,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/skyfire.webp",
     feature: "img/features/skyfire.webp",
     description: "Classic vertical shoot-'em-up: fly over islands and deserts, shoot down squadrons, beat flying fortresses and upgrade your plane in the hangar.",
-    component: lazy(() => import("./games/skyfire")),
+    component: load(() => import("./games/skyfire")),
   },
   {
     id: "untwine",
@@ -150,7 +155,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/untwine.webp",
     feature: "img/features/untwine.webp",
     description: "A satisfying ring-twisting puzzle: rotate each ring so its gap lines up with its neighbour and free them all within the move limit.",
-    component: lazy(() => import("./games/untwine")),
+    component: load(() => import("./games/untwine")),
   },
   {
     id: "ludoblitz",
@@ -160,7 +165,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/ludoblitz.webp",
     feature: "img/features/ludoblitz.webp",
     description: "Fast Ludo against smart AI rivals: roll the dice, capture opponents, use golden sixes and race all your tokens home across themed stages.",
-    component: lazy(() => import("./games/ludoblitz")),
+    component: load(() => import("./games/ludoblitz")),
   },
   {
     id: "sunnysolitaire",
@@ -170,7 +175,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/sunnysolitaire.webp",
     feature: "img/features/sunnysolitaire.webp",
     description: "Classic Klondike solitaire with Draw 1 or Draw 3, tap-to-move, drag and drop, hints, undo and a satisfying win cascade.",
-    component: lazy(() => import("./games/sunnysolitaire")),
+    component: load(() => import("./games/sunnysolitaire")),
   },
   {
     id: "pixelcross",
@@ -179,7 +184,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/pixelcross.webp",
     description: "Picture-logic nonograms: use the row and column clues to fill the grid and reveal a hidden pixel picture. Three hearts per puzzle.",
-    component: lazy(() => import("./games/pixelcross")),
+    component: load(() => import("./games/pixelcross")),
   },
   {
     id: "melodytiles",
@@ -189,7 +194,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/melodytiles.webp",
     feature: "img/features/melodytiles.webp",
     description: "Tap the black tiles in time to play famous melodies note by note. Hold the long tiles, keep the rhythm and unlock new songs.",
-    component: lazy(() => import("./games/melodytiles")),
+    component: load(() => import("./games/melodytiles")),
   },
   {
     id: "bubblebloom",
@@ -199,7 +204,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/bubblebloom.webp",
     feature: "img/features/bubblebloom.webp",
     description: "A cheerful bubble shooter: aim, bounce and match three to pop bubbles and free the flower buds before you run out of shots. Bombs and rainbow bubbles help.",
-    component: lazy(() => import("./games/bubblebloom")),
+    component: load(() => import("./games/bubblebloom")),
   },
   {
     id: "brickbounce",
@@ -208,7 +213,7 @@ export const GAMES: GameEntry[] = [
     genre: "Arcade",
     icon: "img/icons/brickbounce.webp",
     description: "Aim a volley of balls to smash numbered bricks before they reach the bottom. Collect rings for extra balls and line up perfect bank shots.",
-    component: lazy(() => import("./games/brickbounce")),
+    component: load(() => import("./games/brickbounce")),
   },
   {
     id: "flapflock",
@@ -217,7 +222,7 @@ export const GAMES: GameEntry[] = [
     genre: "Arcade",
     icon: "img/icons/flapflock.webp",
     description: "Tap to flap through gaps between the trees from sunny morning to starry night. Collect seeds and unlock new birds.",
-    component: lazy(() => import("./games/flapflock")),
+    component: load(() => import("./games/flapflock")),
   },
   {
     id: "ghostline",
@@ -227,7 +232,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/ghostline.webp",
     feature: "img/features/ghostline.webp",
     description: "Stealth infiltration: sneak through generated facilities, dodge guard vision cones, steal the data shards and reach the exit using decoys and a cloak.",
-    component: lazy(() => import("./games/ghostline")),
+    component: load(() => import("./games/ghostline")),
   },
   {
     id: "neuralsiege",
@@ -237,7 +242,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/neuralsiege.webp",
     feature: "img/features/neuralsiege.webp",
     description: "A strategy board duel against NEXUS, an AI that searches moves ahead and taunts you as it climbs through ten tiers of difficulty.",
-    component: lazy(() => import("./games/neuralsiege")),
+    component: load(() => import("./games/neuralsiege")),
   },
   {
     id: "voltrace",
@@ -247,7 +252,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/voltrace.webp",
     feature: "img/features/voltrace.webp",
     description: "Neon anti-gravity racing on generated tracks against five AI rivals. Hit boost pads, draft, and climb the leagues.",
-    component: lazy(() => import("./games/voltrace")),
+    component: load(() => import("./games/voltrace")),
   },
   {
     id: "firewall",
@@ -257,7 +262,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/firewall.webp",
     feature: "img/features/firewall.webp",
     description: "Tower defense against an adaptive virus: build and upgrade towers to guard the core while each wave studies your defenses and changes its route.",
-    component: lazy(() => import("./games/firewall")),
+    component: load(() => import("./games/firewall")),
   },
   {
     id: "swarmbreaker",
@@ -267,7 +272,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/swarmbreaker.webp",
     feature: "img/features/swarmbreaker.webp",
     description: "Twin-stick neon shooter against a hive mind that analyses how you play and adapts its tactics every wave. Dash, pick upgrades, survive.",
-    component: lazy(() => import("./games/swarmbreaker")),
+    component: load(() => import("./games/swarmbreaker")),
   },
   {
     id: "bladetoss",
@@ -277,7 +282,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/bladetoss.webp",
     feature: "img/features/bladetoss.webp",
     description: "Throw knives into the spinning log without hitting the blades already in it. Slice apples for coins, beat bosses every fifth stage and unlock new knives.",
-    component: lazy(() => import("./games/bladetoss")),
+    component: load(() => import("./games/bladetoss")),
   },
   {
     id: "skystack",
@@ -287,7 +292,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/skystack.webp",
     feature: "img/features/skystack.webp",
     description: "Drop swinging floors from the crane and stack a skyscraper through the clouds, the sunset and into space. Perfect drops build combos.",
-    component: lazy(() => import("./games/skystack")),
+    component: load(() => import("./games/skystack")),
   },
   {
     id: "hoopshot",
@@ -296,7 +301,7 @@ export const GAMES: GameEntry[] = [
     genre: "Sports",
     icon: "img/icons/hoopshot.webp",
     description: "Flick the ball to sink baskets, chain swishes to catch fire for bonus points, and keep scoring as the hoop starts to move.",
-    component: lazy(() => import("./games/hoopshot")),
+    component: load(() => import("./games/hoopshot")),
   },
   {
     id: "boltjam",
@@ -306,7 +311,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/boltjam.webp",
     feature: "img/features/boltjam.webp",
     description: "Unscrew bolts into matching coloured tins, use the holding tray wisely and drop every plank. Hundreds of levels of satisfying screw-sorting.",
-    component: lazy(() => import("./games/boltjam")),
+    component: load(() => import("./games/boltjam")),
   },
   {
     id: "hexasort",
@@ -315,7 +320,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/hexasort.webp",
     description: "Place stacks of hexagon tiles on the board; neighbouring colours slide together and full stacks of ten clear away. Reach the goal before the board fills.",
-    component: lazy(() => import("./games/hexasort")),
+    component: load(() => import("./games/hexasort")),
   },
   {
     id: "minemeadow",
@@ -324,7 +329,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/minemeadow.webp",
     description: "Classic minesweeper in a sunny meadow: dig safe squares, read the numbers, flag every mine. Three board sizes and best times.",
-    component: lazy(() => import("./games/minemeadow")),
+    component: load(() => import("./games/minemeadow")),
   },
   {
     id: "tilegarden",
@@ -334,7 +339,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/tilegarden.webp",
     feature: "img/features/tilegarden.webp",
     description: "A calm tile-matching puzzle: pick free tiles into the tray, match three alike to clear them, and empty every garden without filling the tray.",
-    component: lazy(() => import("./games/tilegarden")),
+    component: load(() => import("./games/tilegarden")),
   },
   {
     id: "sudokuzen",
@@ -344,7 +349,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/sudokuzen.webp",
     feature: "img/features/sudokuzen.webp",
     description: "Unlimited sudoku puzzles with a unique solution from Easy to Expert, with pencil notes, hints, undo and a three-mistake rule.",
-    component: lazy(() => import("./games/sudokuzen")),
+    component: load(() => import("./games/sudokuzen")),
   },
   {
     id: "fourup",
@@ -353,7 +358,7 @@ export const GAMES: GameEntry[] = [
     genre: "Board",
     icon: "img/icons/fourup.webp",
     description: "The classic connect-four duel against a smart CPU with three difficulty levels, hints and winning streaks.",
-    component: lazy(() => import("./games/fourup")),
+    component: load(() => import("./games/fourup")),
   },
   {
     id: "fruitfusion",
@@ -363,7 +368,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/fruitfusion.webp",
     feature: "img/features/fruitfusion.webp",
     description: "Drop fruit into the jar and merge matching pairs into bigger fruit, all the way up to the watermelon, before the jar overflows.",
-    component: lazy(() => import("./games/fruitfusion")),
+    component: load(() => import("./games/fruitfusion")),
   },
   {
     id: "prismblocks",
@@ -373,7 +378,7 @@ export const GAMES: GameEntry[] = [
     icon: "img/icons/prismblocks.webp",
     feature: "img/features/prismblocks.webp",
     description: "Drag glowing blocks onto the 8x8 board and fill rows and columns to shatter them. Chain clears for combos and keep the board alive.",
-    component: lazy(() => import("./games/prismblocks")),
+    component: load(() => import("./games/prismblocks")),
   },
   {
     id: "linklines",
@@ -382,7 +387,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/linklines.webp",
     description: "Link every pair of matching dots with pipes that never cross, and fill the whole board. Endless levels from 5x5 upwards.",
-    component: lazy(() => import("./games/linklines")),
+    component: load(() => import("./games/linklines")),
   },
   {
     id: "slide2048",
@@ -391,7 +396,7 @@ export const GAMES: GameEntry[] = [
     genre: "Puzzle",
     icon: "img/icons/slide2048.webp",
     description: "The classic number-sliding puzzle: swipe to slide every tile, merge equal numbers and chase the 2048 tile.",
-    component: lazy(() => import("./games/slide2048")),
+    component: load(() => import("./games/slide2048")),
   },
   {
     id: "arrowpuzzle",
@@ -402,6 +407,6 @@ export const GAMES: GameEntry[] = [
     feature: "img/features/arrowpuzzle.webp",
     description:
       "Minimal neon logic puzzle where each arrow flies off the board only if its path is clear. 100 hand-tuned levels, then endless generated ones that are always solvable.",
-    component: lazy(() => import("./games/arrowpuzzle/ui/ArrowPuzzle")),
+    component: load(() => import("./games/arrowpuzzle/ui/ArrowPuzzle")),
   },
 ];

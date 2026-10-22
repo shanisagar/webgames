@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { GameEntry } from "../games";
+import { updateManifest } from "./manifest";
 import type { ClientTheme } from "../kit/theme";
 
 /** Studio branding. The name is a placeholder until the studio is named. */
@@ -49,7 +50,7 @@ export function themeVars(t?: ClientTheme): CSSProperties {
 export function Showcase({ games, brand }: { games: GameEntry[]; brand: Branding }) {
   const [genre, setGenre] = useState("All");
   const [query, setQuery] = useState("");
-  useEffect(() => { document.title = brand.name; }, [brand.name]);
+  useEffect(() => { document.title = brand.name; updateManifest(brand.name, brand.name); }, [brand.name]);
 
   const genres = useMemo(() => ["All", ...new Set(games.map((g) => g.genre))], [games]);
   const shown = games.filter((g) =>

@@ -2,6 +2,8 @@ import { Suspense, useEffect, useState } from "react";
 import { GAMES, type GameEntry } from "../games";
 import { AdService } from "../kit/ads";
 import { currentClient, setClient, type ClientConfig } from "../kit/theme";
+import { Boundary } from "./Boundary";
+import { updateManifest } from "./manifest";
 import { rememberPlayed, Showcase, themeVars, type Branding } from "./Showcase";
 import { loadPortal } from "./store";
 
@@ -9,14 +11,17 @@ import { loadPortal } from "./store";
 export function GameFrame({ game, back, brand }: { game: GameEntry; back: string; brand?: Branding }) {
   useEffect(() => {
     document.title = brand ? `${game.name} · ${brand.name}` : game.name;
+    updateManifest(document.title, game.name);
     rememberPlayed(game.id);
   }, [game, brand]);
   const Game = game.component;
   return (
     <div className="frame" style={themeVars(brand?.theme)}>
-      <Suspense fallback={<div className="loading">Loading {game.name}…</div>}>
-        <Game />
-      </Suspense>
+      <Boundary back={back}>
+        <Suspense fallback={<div className="loading">Loading {game.name}…</div>}>
+          <Game />
+        </Suspense>
+      </Boundary>
       <a className="frame-back" href={back} aria-label="All games" title="All games">
         <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
       </a>
