@@ -3,7 +3,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { Background } from "../game/background";
 import { BoardScene } from "../game/BoardScene";
 import { game } from "../game/controller";
-import { GameNav } from "../../../kit/shell";
+import { GameNav } from "../../../kit/nav";
 import { Sfx } from "../game/sfx";
 import { useUi } from "../game/store";
 import { getTheme } from "../game/theme";

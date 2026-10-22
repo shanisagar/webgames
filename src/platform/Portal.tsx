@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { GAMES, type GameEntry } from "../games";
 import { AdService } from "../kit/ads";
-import { GameNav } from "../kit/shell";
+import { GameNav } from "../kit/nav";
 import { currentClient, setClient, type ClientConfig } from "../kit/theme";
 import { Boundary } from "./Boundary";
 import { updateManifest } from "./manifest";
@@ -50,8 +50,11 @@ export function clientBrand(c: ClientConfig): Branding {
 
 type State = { status: "loading" } | { status: "missing" } | { status: "error"; message: string } | { status: "ok"; client: ClientConfig };
 
-/** #/c/<slug> (the client's game list) and #/c/<slug>/<game>. */
-export function Portal({ slug, gameId }: { slug: string; gameId: string }) {
+/**
+ * #/c/<slug> (the client's game list) and #/c/<slug>/<game>. `embedded` is the same portal inside an operator's
+ * iframe (#/embed/portal/<slug>): links stay inside the embed and the logo doesn't navigate away.
+ */
+export function Portal({ slug, gameId, embedded = false }: { slug: string; gameId: string; embedded?: boolean }) {
   const [state, setState] = useState<State>({ status: "loading" });
   useEffect(() => {
     let live = true;
@@ -71,11 +74,12 @@ export function Portal({ slug, gameId }: { slug: string; gameId: string }) {
   }, [slug]);
 
   if (state.status === "loading") return <div className="loading">Loading…</div>;
-  if (state.status === "missing") return <Notice title="Portal not found" text={`There is no active games portal at "${slug}".`} />;
-  if (state.status === "error") return <Notice title="Something went wrong" text={state.message} />;
+  const home = embedded ? null : "#/";
+  if (state.status === "missing") return <Notice title="Portal not found" text={`There is no active games portal at "${slug}".`} link={home} />;
+  if (state.status === "error") return <Notice title="Something went wrong" text={state.message} link={home} />;
 
   const client = state.client;
-  const brand = clientBrand(client);
+  const brand = embedded ? { ...clientBrand(client), base: `#/embed/portal/${client.slug}/`, homeUrl: undefined } : clientBrand(client);
   const ids = client.games ?? GAMES.map((g) => g.id);
   const games = ids.map((id) => GAMES.find((g) => g.id === id)).filter((g): g is GameEntry => !!g);
   if (gameId) {
@@ -86,12 +90,12 @@ export function Portal({ slug, gameId }: { slug: string; gameId: string }) {
   return <Showcase games={games} brand={brand} />;
 }
 
-export function Notice({ title, text, link = "#/" }: { title: string; text: string; link?: string }) {
+export function Notice({ title, text, link = "#/" }: { title: string; text: string; link?: string | null }) {
   return (
     <main className="notice">
       <h1>{title}</h1>
       <p>{text}</p>
-      <a href={link}>Back to games</a>
+      {link && <a href={link}>Back to games</a>}
     </main>
   );
 }

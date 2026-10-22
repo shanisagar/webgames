@@ -1,4 +1,5 @@
 import { AdService } from "./ads";
+import { GameNav } from "./nav";
 import { Art } from "./art";
 import { Fx } from "./fx";
 import { Color, Ease, Fmt, Mathf, Pal, Random, V2, V3 } from "./math";
@@ -66,17 +67,6 @@ const C = new V2(0.5, 0.5);
  * virtual sticks), pause, results, how-to-play, settings and a 3-card choice picker. Adapts to portrait/landscape
  * (short side = 1080 canvas units) and the device safe area (Shell.cs).
  */
-/**
- * Leaving the game for the site's game list. The site sets `home` while a game is open; the shell then shows ALL GAMES
- * on the title screen and in the pause menu, and tags the page so the site hides its own floating back button
- * (which would overlap game HUDs).
- */
-export const GameNav = {
-  home: null as (() => void) | null,
-  /** For games without the shell: hides the site's back button while a round is being played. */
-  setPlaying(on: boolean) { document.body.classList.toggle("na-playing", on); },
-};
-
 export class Shell extends Behaviour {
   PlayPressed: (() => void) | null = null;
   PausePressed: (() => void) | null = null;
