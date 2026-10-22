@@ -17,6 +17,34 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "bubblebloom",
+    name: "Bubble Bloom",
+    tagline: "Pop bubbles. Free the flowers.",
+    genre: "Puzzle",
+    icon: "img/icons/bubblebloom.webp",
+    feature: "img/features/bubblebloom.webp",
+    description: "A cheerful bubble shooter: aim, bounce and match three to pop bubbles and free the flower buds before you run out of shots. Bombs and rainbow bubbles help.",
+    component: lazy(() => import("./games/bubblebloom")),
+  },
+  {
+    id: "brickbounce",
+    name: "Brick Bounce",
+    tagline: "Aim. Fire. Break every brick.",
+    genre: "Arcade",
+    icon: "img/icons/brickbounce.webp",
+    description: "Aim a volley of balls to smash numbered bricks before they reach the bottom. Collect rings for extra balls and line up perfect bank shots.",
+    component: lazy(() => import("./games/brickbounce")),
+  },
+  {
+    id: "flapflock",
+    name: "Flap Flock",
+    tagline: "Tap. Flap. Fly through the forest.",
+    genre: "Arcade",
+    icon: "img/icons/flapflock.webp",
+    description: "Tap to flap through gaps between the trees from sunny morning to starry night. Collect seeds and unlock new birds.",
+    component: lazy(() => import("./games/flapflock")),
+  },
+  {
     id: "ghostline",
     name: "Ghostline",
     tagline: "Infiltrate. Steal the data. Stay unseen.",
