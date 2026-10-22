@@ -93,6 +93,7 @@ export class SnakeBrawlGame extends ArcadeGame {
 
   protected Describe() {
     return new GameInfo({
+      HomeBesidePause: true,
       Id: "snakebrawl",
       Title: "SNAKE BRAWL",
       Tagline: "EAT. GROW. OUTSMART EVERY SNAKE.",

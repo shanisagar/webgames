@@ -30,6 +30,8 @@ export class GameInfo {
   Music: MusicStyle = DefaultMusic;
   Touch = TouchScheme.None;
   PauseButton = true;
+  /** Home button left of pause instead of under it (for games with a minimap or leaderboard under pause). */
+  HomeBesidePause = false;
   Reminders: string[] = [];
   constructor(init?: Partial<GameInfo>) { if (init) Object.assign(this, init); }
 }
@@ -122,6 +124,7 @@ export class Shell extends Behaviour {
   private resumeButton!: ArcadeButton;
   private retryButton!: ArcadeButton;
   private pauseButton!: ArcadeButton;
+  private homeButton: ArcadeButton | null = null;
   private soundToggle!: ArcadeButton;
   private musicToggle!: ArcadeButton;
   private hapticsToggle!: ArcadeButton;
@@ -176,6 +179,12 @@ export class Shell extends Behaviour {
     for (let i = 0; i < 2; i++) UIKit.img(this.pauseButton.node, "Bar", Art.UiRound, info.Accent).rectTransform.place(C, new V2(i === 0 ? -13 : 13, 0), new V2(16, 44));
     this.pauseButton.setAccent(info.Accent);
     this.pauseButton.node.setActive(info.PauseButton);
+    // One tap back to the game list, stacked under pause: games keep their top bars clear of the right-hand column.
+    if (GameNav.home) {
+      const home = GameNav.home;
+      const pos = !info.PauseButton ? new V2(-85, -85) : info.HomeBesidePause ? new V2(-210, -85) : new V2(-85, -210);
+      this.homeButton = this.homeIcon(this.Hud, new V2(1, 1), pos, home);
+    }
 
     const hintRt = UIKit.node("Hint", this.hud.node).place(new V2(0.5, 0), new V2(0, 330), new V2(660, 150));
     this.hint = new CanvasGroup(hintRt);
@@ -214,7 +223,7 @@ export class Shell extends Behaviour {
     this.titleStats = UIKit.at(UIKit.label(c, "", 28, Pal.TextDim), C, new V2(0, -425), new V2(1000, 50));
     if (GameNav.home) {
       const home = GameNav.home;
-      UIKit.buttonAt(this.title.node, "ALL GAMES", new V2(0, 1), new V2(150, -80), new V2(260, 96), false, () => home(), 30).setAccent(info.Accent);
+      this.homeIcon(this.title.node, new V2(0, 1), new V2(85, -85), home);
     }
     this.newsText = UIKit.at(UIKit.wrap(UIKit.label(c, "", 30, Pal.Warn)), C, new V2(0, 475), new V2(980, 60));
   }
@@ -390,7 +399,17 @@ export class Shell extends Behaviour {
     this.show(this.pause, on);
   }
 
-  SetPauseButton(visible: boolean) { this.pauseButton.node.setActive(visible && this.info.PauseButton); }
+  SetPauseButton(visible: boolean) {
+    this.pauseButton.node.setActive(visible && this.info.PauseButton);
+    this.homeButton?.node.setActive(visible);
+  }
+
+  private homeIcon(parent: UINode, anchor: V2, pos: V2, home: () => void) {
+    const b = UIKit.buttonAt(parent, "", anchor, pos, new V2(110, 110), false, () => home());
+    UIKit.img(b.node, "Home", Art.Home, this.info.Accent).rectTransform.place(C, new V2(0, 2), new V2(54, 54));
+    b.setAccent(this.info.Accent);
+    return b;
+  }
 
   ShowResult(r: Result) {
     this.hideChoices();

@@ -22,14 +22,14 @@ export function GameFrame({ game, back, brand }: { game: GameEntry; back: string
   }, [back]);
   const Game = game.component;
   return (
-    <div className="frame" style={themeVars(brand?.theme)}>
+    <div className="frame" data-game={game.id} style={themeVars(brand?.theme)}>
       <Boundary back={back}>
         <Suspense fallback={<div className="loading">Loading {game.name}…</div>}>
           <Game />
         </Suspense>
       </Boundary>
       <a className="frame-back" href={back} aria-label="All games" title="All games">
-        <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
+        <svg viewBox="0 0 24 24" aria-hidden><path d="M3.5 11.5 12 4l8.5 7.5M6 10v9.5h4.5V14h3v5.5H18V10" /></svg>
       </a>
     </div>
   );

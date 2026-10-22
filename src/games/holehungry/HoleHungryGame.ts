@@ -179,6 +179,7 @@ export class HoleHungryGame extends ArcadeGame {
   protected Describe() {
     const d = HoleArt.Defs;
     return new GameInfo({
+      HomeBesidePause: true,
       Id: "holehungry",
       Title: "HOLE HUNGRY",
       Tagline: "SWALLOW THE CITY. BE THE BIGGEST HOLE.",

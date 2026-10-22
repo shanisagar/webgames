@@ -54,6 +54,11 @@ export const Art = {
       return Art.poly(p, ...pts) * (1 - Art.edge(0.12 - p.magnitude));
     });
   },
+  get Home() {
+    return Art.shape("home", (p) => Art.poly(p, new V2(0, 0.86), new V2(0.92, 0.04), new V2(0.64, 0.04), new V2(0.64, -0.82),
+      new V2(0.2, -0.82), new V2(0.2, -0.3), new V2(-0.2, -0.3), new V2(-0.2, -0.82), new V2(-0.64, -0.82), new V2(-0.64, 0.04),
+      new V2(-0.92, 0.04)));
+  },
   get Plus() {
     return Art.shape("plus", (p) => Art.edge(Math.min(0.95 - Math.max(Math.abs(p.x), Math.abs(p.y)), 0.3 - Math.min(Math.abs(p.x), Math.abs(p.y)))));
   },

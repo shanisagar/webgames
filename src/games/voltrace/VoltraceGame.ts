@@ -78,6 +78,7 @@ export class VoltraceGame extends ArcadeGame {
 
   protected Describe() {
     return new GameInfo({
+      HomeBesidePause: true,
       Id: "voltrace",
       Reminders: [
         "Your rivals are practicing|VEGA just shaved a second off her lap. Take it back.",
