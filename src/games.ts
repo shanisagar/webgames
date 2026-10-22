@@ -17,6 +17,16 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "holehungry",
+    name: "Hole Hungry",
+    tagline: "Swallow the city. Be the biggest hole.",
+    genre: "Arcade",
+    icon: "img/icons/holehungry.webp",
+    feature: "img/features/holehungry.webp",
+    description: "Steer a hungry hole through a busy city and swallow people, cars, trees and towers to grow. Outgrow six rival holes in 2-minute rounds, or clear the whole city solo. Unlock new rims.",
+    component: lazy(() => import("./games/holehungry")),
+  },
+  {
     id: "poolpro",
     name: "Pool Pro",
     tagline: "8-ball hustle around the world.",
