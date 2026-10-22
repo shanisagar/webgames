@@ -1,4 +1,4 @@
-import { AdService, applyClientTheme, Behaviour, Camera, Color, GameInfo, GameObject, Gamepad, Keyboard, Mathf, Random, Time, V2 } from "../../kit";
+import { AdService, applyClientTheme, Behaviour, GameNav, Camera, Color, GameInfo, GameObject, Gamepad, Keyboard, Mathf, Random, Time, V2 } from "../../kit";
 import { Arena } from "./Arena";
 import { Comet } from "./Comet";
 import { EntityKind, Palette, Rules, Save, syncPal } from "./Core";
@@ -118,6 +118,7 @@ export class LumiloopGame extends Behaviour {
   }
 
   onDestroy() {
+    GameNav.setPlaying(false);
     if (LumiloopGame.Instance === this) LumiloopGame.Instance = null;
     Time.timeScale = 1;
   }
@@ -136,6 +137,7 @@ export class LumiloopGame extends Behaviour {
 
   private EnterTitle() {
     this.Current = State.Title;
+    GameNav.setPlaying(false);
     Time.timeScale = 1;
     this.swarm.Clear();
     this.director.Reset(false);
@@ -156,6 +158,7 @@ export class LumiloopGame extends Behaviour {
 
   private StartRun() {
     this.Current = State.Playing;
+    GameNav.setPlaying(true);
     Time.timeScale = 1;
 
     this.score = this.combo = this.bestCombo = this.loops = this.biggestLoop = this.loopsReported = 0;
@@ -226,6 +229,7 @@ export class LumiloopGame extends Behaviour {
 
   private FinishRun() {
     this.Current = State.GameOver;
+    GameNav.setPlaying(false);
     const newBest = this.score > Save.Best;
     if (newBest) Save.Best = this.score;
     if (!this.revived) Save.GamesPlayed++;

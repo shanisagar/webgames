@@ -64,6 +64,17 @@ const C = new V2(0.5, 0.5);
  * virtual sticks), pause, results, how-to-play, settings and a 3-card choice picker. Adapts to portrait/landscape
  * (short side = 1080 canvas units) and the device safe area (Shell.cs).
  */
+/**
+ * Leaving the game for the site's game list. The site sets `home` while a game is open; the shell then shows ALL GAMES
+ * on the title screen and in the pause menu, and tags the page so the site hides its own floating back button
+ * (which would overlap game HUDs).
+ */
+export const GameNav = {
+  home: null as (() => void) | null,
+  /** For games without the shell: hides the site's back button while a round is being played. */
+  setPlaying(on: boolean) { document.body.classList.toggle("na-playing", on); },
+};
+
 export class Shell extends Behaviour {
   PlayPressed: (() => void) | null = null;
   PausePressed: (() => void) | null = null;
@@ -150,6 +161,7 @@ export class Shell extends Behaviour {
     this.buildPause();
     this.buildResult();
     this.buildHowTo();
+    if (GameNav.home) document.body.classList.add("na-has-nav");
     this.buildSettings();
     this.buildChoices();
     this.applyLayout(true);
@@ -200,6 +212,10 @@ export class Shell extends Behaviour {
     UIKit.buttonAt(c, "SETTINGS", C, new V2(185, -195), new V2(340, 100), false, () => this.openModal(this.settings), 34).setAccent(info.Accent);
     this.TitleExtra = UIKit.node("Extra", c).place(C, new V2(0, -315), new V2(1000, 110));
     this.titleStats = UIKit.at(UIKit.label(c, "", 28, Pal.TextDim), C, new V2(0, -425), new V2(1000, 50));
+    if (GameNav.home) {
+      const home = GameNav.home;
+      UIKit.buttonAt(this.title.node, "ALL GAMES", new V2(0, 1), new V2(150, -80), new V2(260, 96), false, () => home(), 30).setAccent(info.Accent);
+    }
     this.newsText = UIKit.at(UIKit.wrap(UIKit.label(c, "", 30, Pal.Warn)), C, new V2(0, 475), new V2(980, 60));
   }
 
@@ -215,7 +231,13 @@ export class Shell extends Behaviour {
     UIKit.buttonAt(c, "MENU", C, new V2(0, -175), new V2(480, 110), false, () => this.MenuPressed?.(), 40).setAccent(info.Accent);
     this.pauseSound = UIKit.buttonAt(c, "SOUND", C, new V2(-123, -320), new V2(235, 90), false, () => this.toggleSound(), 28);
     this.pauseMusic = UIKit.buttonAt(c, "MUSIC", C, new V2(123, -320), new V2(235, 90), false, () => this.toggleMusic(), 28);
+    if (GameNav.home) {
+      const home = GameNav.home;
+      UIKit.buttonAt(c, "ALL GAMES", C, new V2(0, -440), new V2(480, 90), false, () => home(), 32).setAccent(info.Accent);
+    }
   }
+
+  onDestroy() { document.body.classList.remove("na-has-nav"); }
 
   private buildResult() {
     const info = this.info;

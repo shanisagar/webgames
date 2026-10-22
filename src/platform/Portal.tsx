@@ -1,6 +1,7 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { GAMES, type GameEntry } from "../games";
 import { AdService } from "../kit/ads";
+import { GameNav } from "../kit/shell";
 import { currentClient, setClient, type ClientConfig } from "../kit/theme";
 import { Boundary } from "./Boundary";
 import { updateManifest } from "./manifest";
@@ -14,6 +15,11 @@ export function GameFrame({ game, back, brand }: { game: GameEntry; back: string
     updateManifest(document.title, game.name);
     rememberPlayed(game.id);
   }, [game, brand]);
+  // Kit games show ALL GAMES on their own title and pause screens. A layout effect runs before the game boots.
+  useLayoutEffect(() => {
+    GameNav.home = () => { location.hash = back; };
+    return () => { GameNav.home = null; };
+  }, [back]);
   const Game = game.component;
   return (
     <div className="frame" style={themeVars(brand?.theme)}>

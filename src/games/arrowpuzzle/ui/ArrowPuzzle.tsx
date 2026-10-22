@@ -3,6 +3,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { Background } from "../game/background";
 import { BoardScene } from "../game/BoardScene";
 import { game } from "../game/controller";
+import { GameNav } from "../../../kit/shell";
 import { Sfx } from "../game/sfx";
 import { useUi } from "../game/store";
 import { getTheme } from "../game/theme";
@@ -69,6 +70,9 @@ export default function ArrowPuzzle() {
       phaser.destroy(true);
     };
   }, []);
+
+  useEffect(() => { GameNav.setPlaying(s.screen === "hud"); }, [s.screen]);
+  useEffect(() => () => GameNav.setPlaying(false), []);
 
   const vars = {
     "--accent": t.accent, "--accent2": t.accent2, "--danger": t.danger, "--success": t.success,
