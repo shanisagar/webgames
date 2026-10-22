@@ -1,5 +1,5 @@
 // Smoke test for one game folder against the dev server (npx vite --port 5173).
-// Usage: NODE_PATH=$(npm root -g) node scripts/smoke.cjs <folder> <outDir> [seconds]
+// Usage: [SMOKE_URL=http://localhost:5173] NODE_PATH=$(npm root -g) node scripts/smoke.cjs <folder> <outDir> [seconds]
 // Opens #/dev/<folder> on a phone and a desktop viewport, presses PLAY, plays with random input,
 // saves screenshots and prints page errors. Exit code 1 on any page error.
 const { chromium, devices } = require("playwright");
@@ -7,6 +7,8 @@ const { chromium, devices } = require("playwright");
 const [folder, outDir = ".", secondsArg = "8"] = process.argv.slice(2);
 if (!folder) { console.error("usage: smoke.cjs <folder> <outDir> [seconds]"); process.exit(2); }
 const seconds = Number(secondsArg);
+/** Dev server to test against (SMOKE_URL=http://localhost:5181 for a private server). */
+const BASE = (process.env.SMOKE_URL || "http://localhost:5173").replace(/\/$/, "");
 
 (async () => {
   const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
@@ -16,7 +18,7 @@ const seconds = Number(secondsArg);
     const page = await ctx.newPage();
     page.on("pageerror", (e) => errors.push(`[${name}] ${e.message}\n${(e.stack || "").split("\n").slice(1, 5).join("\n")}`));
     page.on("console", (m) => { if (m.type() === "error") errors.push(`[${name}] console: ${m.text().slice(0, 300)}`); });
-    await page.goto(`http://localhost:5173/?smoke=${Date.now()}#/dev/${folder}`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}/?smoke=${Date.now()}#/dev/${folder}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(2500);
     await page.screenshot({ path: `${outDir}/${folder}-${name}-1-title.png` });
     // press the title screen's primary button (PLAY or the game's PlayLabel)
