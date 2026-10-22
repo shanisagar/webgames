@@ -987,7 +987,7 @@ export class TowerConquestGame extends ArcadeGame {
       this.Finish(new Result({
         Headline: won ? (solo ? "MAP CONQUERED!" : "VICTORY!") : this.TimeLeft <= 0 ? "TIME'S UP!" : "DEFEATED",
         HeadlineColor: won ? Gold : hex(0xffb0b0),
-        Value: won ? "" : `${towers} / ${total} TOWERS`,
+        Value: won ? "" : `${towers}/${total}`,
         Stars: won ? stars : -1,
         NewBest: won && newBest && stars === 3,
         BestLine: `LEVEL ${L}  ·  ${this.map?.name ?? ""}`,
@@ -1005,7 +1005,7 @@ export class TowerConquestGame extends ArcadeGame {
     this.Finish(new Result({
       Headline: won ? "VICTORY!" : this.TimeLeft <= 0 ? "TIME'S UP!" : "DEFEATED",
       HeadlineColor: won ? Gold : hex(0xffb0b0),
-      Value: won ? "" : `${towers} / ${total} TOWERS`,
+      Value: won ? "" : `${towers}/${total}`,
       Stars: won ? stars : -1,
       BestLine: this.mode === Mode.VsCpu ? `VS CPU ${BotNames[d]}:  ${this.Data.get("w" + d)} WON  ·  ${this.Data.get("l" + d)} LOST` : `FREE-FOR-ALL ${BotNames[d]}:  ${this.Data.get("f" + d)} WINS`,
       Stats: stats,
@@ -1031,8 +1031,11 @@ export class TowerConquestGame extends ArcadeGame {
     if (this.sim.towersOf(0) === 0) {
       const home = this.sim.towers.reduce((a, b) => (V2.distance(b.pos, this.map!.towers[0].pos) < V2.distance(a.pos, this.map!.towers[0].pos) ? b : a));
       home.owner = 0;
-      home.troops = RallyAmount;
+      home.troops = RallyAmount * 2;
       this.sim.alive[0] = true;
+      // a fresh start: troops already marching on the returned tower turn back
+      for (const u of this.sim.units) if (u.to === home) u.alive = false;
+      for (let i = this.sim.orders.length - 1; i >= 0; i--) if (this.sim.orders[i].to === home) this.sim.orders.splice(i, 1);
     }
     for (const t of this.sim.towers) if (t.owner === 0) t.troops += RallyAmount;
     this.ended = false;

@@ -22,6 +22,26 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "towerconquest",
+    name: "Tower Conquest",
+    tagline: "Send troops. Capture towers. Grow your empire.",
+    genre: "Strategy",
+    icon: "img/icons/towerconquest.webp",
+    feature: "img/features/towerconquest.webp",
+    description: "Drag troops between towers to conquer a coloured map of outposts, keeps and fortresses. Play an endless campaign, duel a CPU, take on three rival empires at once, or battle a friend on the same screen.",
+    component: load(() => import("./games/towerconquest")),
+  },
+  {
+    id: "snakesladders",
+    name: "Snakes & Ladders Dash",
+    tagline: "Roll. Race. Climb and slide!",
+    genre: "Board",
+    icon: "img/icons/snakesladders.webp",
+    feature: "img/features/snakesladders.webp",
+    description: "The classic race to 100 with a tumbling 3-D die, five themed boards and optional power cards: shield against snakes, roll double or swap with the leader. Play CPUs, pass and play with up to 4 friends, or race your best in Solo Dash.",
+    component: load(() => import("./games/snakesladders")),
+  },
+  {
     id: "dashrush",
     name: "Dash Rush",
     tagline: "Swipe. Jump. Roll. Outrun the rail yard!",

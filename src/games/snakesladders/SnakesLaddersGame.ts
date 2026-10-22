@@ -563,6 +563,7 @@ export class SnakesLaddersGame extends ArcadeGame {
   private *Turn(p: Player): Generator<ReturnType<typeof wait> | undefined, boolean, unknown> {
     const human = p.human && !this.Attract;
     this.RefreshChips();
+    this.RefreshCards();
     this.doubleNow = false;
     this.pendingCard = -1;
     let reroll = true;
@@ -894,7 +895,7 @@ export class SnakesLaddersGame extends ArcadeGame {
     this.Finish(new Result({
       Headline: won ? "YOU WIN!" : `${this.NameOf(w)} WINS`,
       HeadlineColor: won ? Gold : hex(0xffc0c0),
-      Value: won ? "" : `YOU REACHED ${me.pos}`,
+      Value: won ? "" : `${me.pos}/100`,
       Stars: won ? stars : -1,
       BestLine: `${Themes[th].name}  ·  ${this.Data.get("wins")} WINS  ·  STREAK ${this.Data.get("streak")}`,
       Stats: [["ROLLS", String(me.rolls)], ["LADDERS", String(me.climbs)], ["SNAKE BITES", String(me.bites)], ["COINS", won ? "+" + coins : "◉ " + Fmt.n(this.Coins)]],

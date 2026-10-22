@@ -18,6 +18,11 @@ const sdSeg = (x: number, y: number, ax: number, ay: number, bx: number, by: num
   return Math.hypot(pax - bax * h, pay - bay * h);
 };
 const hex = (v: number) => Pal.hex(v);
+function sdTri(x: number, y: number, ax: number, ay: number, bx: number, by: number, cx: number, cy: number) {
+  const d = Math.min(sdSeg(x, y, ax, ay, bx, by), sdSeg(x, y, bx, by, cx, cy), sdSeg(x, y, cx, cy, ax, ay));
+  const s1 = (bx - ax) * (y - ay) - (by - ay) * (x - ax), s2 = (cx - bx) * (y - by) - (cy - by) * (x - bx), s3 = (ax - cx) * (y - cy) - (ay - cy) * (x - cx);
+  return (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0) ? -d : d;
+}
 
 class Px {
   r = 0; g = 0; b = 0; a = 0;
@@ -144,10 +149,10 @@ export const SnakesArt = {
       const px = 2 / 80, x = p.x, y = p.y;
       let d = 1;
       if (card === 0) {
-        const top = sdBox(x, y - 0.25, 0.72, 0.55, 0.15);
-        const tip = Math.max(Math.abs(x) * 1.25 + (y + 0.05) * 0.95 - 0.0, -(y + 0.85)) - 0.72;
-        d = Math.min(top, Math.max(tip, y - 0.3));
-        d = Math.max(d, -(Math.max(sdBox(x, y - 0.1, 0.1, 0.42, 0.05), -1) < 0 ? 1 : -1) * 0);
+        const top = sdBox(x, y - 0.32, 0.72, 0.5, 0.14);
+        const tri = sdTri(x, y, -0.72, 0.1, 0.72, 0.1, 0, -0.95) - 0.05;
+        d = Math.min(top, tri);
+        d = Math.max(d, -Math.min(sdBox(x, y - 0.1, 0.09, 0.5, 0.04), sdBox(x, y - 0.25, 0.42, 0.09, 0.04)));
       } else if (card === 1) {
         d = Math.min(sdBox(x + 0.28, y - 0.28, 0.42, 0.42, 0.12), sdBox(x - 0.3, y + 0.3, 0.42, 0.42, 0.12));
         const pips = Math.min(Math.hypot(x + 0.28, y - 0.28) - 0.1, Math.hypot(x - 0.3 - 0.18, y + 0.3 - 0.18) - 0.09, Math.hypot(x - 0.3 + 0.18, y + 0.3 + 0.18) - 0.09);
