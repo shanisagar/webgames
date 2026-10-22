@@ -17,6 +17,35 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "fruitfusion",
+    name: "Fruit Fusion",
+    tagline: "Drop. Merge. Grow a watermelon!",
+    genre: "Puzzle",
+    icon: "img/icons/fruitfusion.webp",
+    feature: "img/features/fruitfusion.webp",
+    description: "Drop fruit into the jar and merge matching pairs into bigger fruit, all the way up to the watermelon, before the jar overflows.",
+    component: lazy(() => import("./games/fruitfusion")),
+  },
+  {
+    id: "prismblocks",
+    name: "Prism Blocks",
+    tagline: "Drag. Drop. Shatter the lines.",
+    genre: "Puzzle",
+    icon: "img/icons/prismblocks.webp",
+    feature: "img/features/prismblocks.webp",
+    description: "Drag glowing blocks onto the 8x8 board and fill rows and columns to shatter them. Chain clears for combos and keep the board alive.",
+    component: lazy(() => import("./games/prismblocks")),
+  },
+  {
+    id: "linklines",
+    name: "Link Lines",
+    tagline: "Connect the dots. Fill the board.",
+    genre: "Puzzle",
+    icon: "img/icons/linklines.webp",
+    description: "Link every pair of matching dots with pipes that never cross, and fill the whole board. Endless levels from 5x5 upwards.",
+    component: lazy(() => import("./games/linklines")),
+  },
+  {
     id: "slide2048",
     name: "Slide 2048",
     tagline: "Swipe. Merge. Reach 2048!",
