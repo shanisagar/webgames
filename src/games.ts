@@ -17,6 +17,35 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "tilegarden",
+    name: "Tile Garden",
+    tagline: "Tap three alike. Clear the garden.",
+    genre: "Puzzle",
+    icon: "img/icons/tilegarden.webp",
+    feature: "img/features/tilegarden.webp",
+    description: "A calm tile-matching puzzle: pick free tiles into the tray, match three alike to clear them, and empty every garden without filling the tray.",
+    component: lazy(() => import("./games/tilegarden")),
+  },
+  {
+    id: "sudokuzen",
+    name: "Sudoku Zen",
+    tagline: "Classic sudoku, calm and clean.",
+    genre: "Board",
+    icon: "img/icons/sudokuzen.webp",
+    feature: "img/features/sudokuzen.webp",
+    description: "Unlimited sudoku puzzles with a unique solution from Easy to Expert, with pencil notes, hints, undo and a three-mistake rule.",
+    component: lazy(() => import("./games/sudokuzen")),
+  },
+  {
+    id: "fourup",
+    name: "Four Up",
+    tagline: "Drop discs. Connect four.",
+    genre: "Board",
+    icon: "img/icons/fourup.webp",
+    description: "The classic connect-four duel against a smart CPU with three difficulty levels, hints and winning streaks.",
+    component: lazy(() => import("./games/fourup")),
+  },
+  {
     id: "fruitfusion",
     name: "Fruit Fusion",
     tagline: "Drop. Merge. Grow a watermelon!",
