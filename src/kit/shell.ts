@@ -251,6 +251,12 @@ export class Shell extends Behaviour {
     this.rewardButton = UIKit.buttonAt(c, "CONTINUE", C, new V2(0, -200), new V2(600, 96), false, () => this.claimReward(), 34);
     this.rewardButton.setAccent(Pal.Warn);
     this.rewardButton.node.setActive(false);
+    // Long offers ("+2 HOLDING SLOTS & CONTINUE (AD)") shrink to fit instead of spilling past the button.
+    if (this.rewardButton.label) {
+      this.rewardButton.label.resizeTextForBestFit = true;
+      this.rewardButton.label.resizeTextMinSize = 20;
+      this.rewardButton.label.resizeTextMaxSize = 34;
+    }
     this.retryButton = UIKit.buttonAt(c, "PLAY AGAIN", C, new V2(0, -320), new V2(560, 130), true, () => this.RestartPressed?.(), 52);
     this.retryButton.setAccent(info.Accent);
     UIKit.buttonAt(c, "MENU", C, new V2(0, -450), new V2(300, 90), false, () => this.MenuPressed?.(), 36).setAccent(info.Accent);
