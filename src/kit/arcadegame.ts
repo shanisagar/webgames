@@ -1,3 +1,4 @@
+import { GameEvents, parseScore } from "./events";
 import { AdService } from "./ads";
 import { Backdrop, Fx } from "./fx";
 import { ArcadeInput, Keyboard, Gamepad, Screen, screenToWorld } from "./input";
@@ -80,6 +81,8 @@ export abstract class ArcadeGame extends Behaviour {
     this.FitCamera(true);
     this.Build();
     this.EnterTitle();
+    GameEvents.setGame(this.Info.Id);
+    GameEvents.emit({ type: "ready", game: this.Info.Id });
   }
 
   /** Page hidden / window blurred: pause like OnApplicationPause. */
@@ -117,6 +120,7 @@ export abstract class ArcadeGame extends Behaviour {
     this.UI.ShowHud();
     Sfx.play(Snd.Start);
     this.BeginRun();
+    GameEvents.emit({ type: "start", game: this.Info.Id });
   }
 
   Pause() {
@@ -126,6 +130,7 @@ export abstract class ArcadeGame extends Behaviour {
     Sfx.duck(true);
     this.UI.ShowPause(true);
     this.OnPauseChanged(true);
+    GameEvents.emit({ type: "pause", game: this.Info.Id });
   }
 
   Resume() {
@@ -134,6 +139,7 @@ export abstract class ArcadeGame extends Behaviour {
     Sfx.duck(false);
     this.UI.ShowPause(false);
     this.OnPauseChanged(false);
+    GameEvents.emit({ type: "resume", game: this.Info.Id });
   }
 
   /** Ends the run and shows the result screen. */
@@ -144,6 +150,10 @@ export abstract class ArcadeGame extends Behaviour {
     this.Back.setDanger(0);
     AdService.runEnded();
     this.UI.ShowResult(result);
+    GameEvents.emit({
+      type: "end", game: this.Info.Id, score: parseScore(result.Value, result.CountTo), victory: result.Victory,
+      stars: result.Stars >= 0 ? result.Stars : null, seconds: Math.round(this.RunTime),
+    });
   }
 
   /** Leaving a result screen is the only moment an interstitial may appear (frequency-capped). */
@@ -162,6 +172,7 @@ export abstract class ArcadeGame extends Behaviour {
     Sfx.duck(false);
     this.Back.setDanger(0);
     this.UI.ShowHud();
+    GameEvents.emit({ type: "revive", game: this.Info.Id });
   }
 
   /** Briefly freezes time for impact. */

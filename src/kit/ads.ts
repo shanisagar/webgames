@@ -1,3 +1,4 @@
+import { GameEvents } from "./events";
 import { PlayerPrefs } from "./prefs";
 import { Sfx } from "./sfx";
 import { Time } from "./scene";
@@ -137,6 +138,7 @@ export const AdService = {
     if (!AdService.canShowInterstitial()) { proceed(); return; }
     runsSinceInterstitial = 0;
     begin();
+    GameEvents.emit({ type: "ad", game: GameEvents.game, kind: "interstitial", outcome: "shown" });
     backend!.showInterstitial(() => { end(); proceed(); });
   },
 
@@ -149,9 +151,17 @@ export const AdService = {
 
   /** Opt-in rewarded ad. `done` gets true only if the reward was earned. */
   showRewarded(done: (earned: boolean) => void) {
-    if (!AdService.rewardedAvailable) { done(false); return; }
+    if (!AdService.rewardedAvailable) {
+      GameEvents.emit({ type: "ad", game: GameEvents.game, kind: "rewarded", outcome: "unavailable" });
+      done(false);
+      return;
+    }
     begin();
-    backend!.showRewarded((earned) => { end(); done(earned); });
+    backend!.showRewarded((earned) => {
+      end();
+      GameEvents.emit({ type: "ad", game: GameEvents.game, kind: "rewarded", outcome: earned ? "rewarded" : "skipped" });
+      done(earned);
+    });
   },
 
   setBannerVisible(_visible: boolean) { /* banners live on the website, outside games */ },
