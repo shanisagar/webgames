@@ -17,6 +17,16 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "lumiloop",
+    name: "Lumiloop",
+    tagline: "Draw loops. Capture light.",
+    genre: "Arcade",
+    icon: "img/icons/lumiloop.webp",
+    feature: "img/features/lumiloop.webp",
+    description: "Steer a glowing comet and close loops around golden sparks to refuel your light, while hunters and cutters close in. Chain loops for big combos.",
+    component: lazy(() => import("./games/lumiloop")),
+  },
+  {
     id: "snakebrawl",
     name: "Snake Brawl",
     tagline: "Eat. Grow. Outsmart every snake.",
