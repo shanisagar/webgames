@@ -556,7 +556,8 @@ export class MazeMuncherGame extends ArcadeGame {
   // ------------------------------------------------------------------ frame
 
   protected TickRun(dt: number) {
-    dt = Math.min(dt, 0.05);
+    dt = this.TestFixedDt > 0 ? this.TestFixedDt : Math.min(dt, 0.05 * Math.max(1, this.SpeedMultiplier));
+    this.TestFrame++;
     this.ReadInput();
     for (const b of this.boards) {
       b.bot?.think(b.sim, dt);
@@ -769,6 +770,9 @@ export class MazeMuncherGame extends ArcadeGame {
     };
   }
   set TestSpeed(v: number) { this.SpeedMultiplier = v; }
+  /** Tests on very slow machines advance a fixed game time per rendered frame (slow motion, frame-locked input). */
+  TestFixedDt = 0;
+  TestFrame = 0;
 
   // ------------------------------------------------------------------ results
 

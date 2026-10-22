@@ -51,6 +51,44 @@ interface Gesture {
   samples: { t: number; p: V2 }[];
 }
 
+/**
+ * Pointer velocity from raw DOM events with their own timestamps, so flicks are measured precisely even when the
+ * frame rate dips (the kit only exposes per-frame positions).
+ */
+const PointerLog = {
+  log: new Map<number, { t: number; x: number; y: number }[]>(),
+  upAt: new Map<number, number>(),
+  downAt: new Map<number, number>(),
+  attached: false,
+  attach() {
+    if (this.attached) return;
+    this.attached = true;
+    const key = (e: PointerEvent) => (e.pointerType === "mouse" ? -1 : e.pointerId);
+    const rec = (e: PointerEvent) => {
+      const id = key(e);
+      let a = this.log.get(id);
+      if (!a || e.type === "pointerdown") { a = []; this.log.set(id, a); this.upAt.delete(id); this.downAt.set(id, e.timeStamp / 1000); }
+      a.push({ t: e.timeStamp / 1000, x: e.clientX, y: e.clientY });
+      while (a.length > 2 && a[a.length - 1].t - a[0].t > 0.1) a.shift();
+    };
+    window.addEventListener("pointerdown", rec, true);
+    window.addEventListener("pointermove", rec, true);
+    window.addEventListener("pointerup", (e) => this.upAt.set(key(e), e.timeStamp / 1000), true);
+  },
+  /** Seconds the pointer was down (from event timestamps); null when unknown. */
+  duration(id: number) { const d = this.downAt.get(id), u = this.upAt.get(id); return d !== undefined && u !== undefined ? u - d : null; },
+  /** Release velocity in device px/s, y up (Unity screen convention); null when unknown. */
+  velocity(id: number): V2 | null {
+    const a = this.log.get(id);
+    if (!a || a.length < 2) return null;
+    const up = this.upAt.get(id) ?? a[a.length - 1].t;
+    const f = a[0], l = a[a.length - 1];
+    if (up - l.t > 0.15) return V2.zero; // the finger stopped before lifting
+    const dt = Math.max(0.008, l.t - f.t);
+    return new V2((l.x - f.x) / dt, -(l.y - f.y) / dt).mul(Screen.dpr);
+  },
+};
+
 /** An on-screen touch button (pointer-down, held state, multi-touch safe). */
 class PadButton {
   held = false;
@@ -90,6 +128,7 @@ class Player {
 }
 
 export class BlockDropGame extends ArcadeGame {
+  static readonly Pointers = PointerLog;
   private world!: GameObject;
   private bgCover!: SpriteRenderer;
   private bokeh: { sr: SpriteRenderer; v: V2; ph: number }[] = [];
@@ -199,6 +238,7 @@ export class BlockDropGame extends ArcadeGame {
     CasualLook.titleCard(this.UI, new Color(0.09, 0.04, 0.22, 0.8));
     this.BuildTitle();
     this.BuildSounds();
+    PointerLog.attach();
     this.built = true;
     this.Layout();
   }
@@ -651,9 +691,9 @@ export class BlockDropGame extends ArcadeGame {
         const player = this.mode === Mode.Duo ? (pos.x < Screen.width * 0.5 ? 0 : 1) : 0;
         if (!this.players[player] || this.players[player].bot) return;
         for (const o of this.gestures.values()) if (o.player === player) return; // one finger per board
-        g = { id, player, start: pos, anchor: pos, startTime: now, axis: 0, moved: false, samples: [{ t: now, p: pos }] };
+        g = { id, player, start: pos, anchor: pos, startTime: now, axis: 0, moved: false, samples: [{ t: now - 1 / 60, p: pos }] };
         this.gestures.set(id, g);
-        return;
+        if (!released && down) return;
       }
       if (!g) return;
       g.samples.push({ t: now, p: pos });
@@ -714,13 +754,13 @@ export class BlockDropGame extends ArcadeGame {
     if (!p || !p.alive) return;
     const first = g.samples[0];
     const dtS = Math.max(0.016, now - first.t);
-    const vel = pos.sub(first.p).div(dtS);
+    const vel = PointerLog.velocity(g.id) ?? pos.sub(first.p).div(dtS);
     const total = pos.sub(g.start);
     const step = this.CellPx(g.player);
     const flick = dp(650);
     if (-vel.y > flick && -total.y > step * 1.2 && -total.y > Math.abs(total.x) * 1.2) { this.HumanHardDrop(g.player); return; }
     if (vel.y > flick && total.y > step * 1.5 && total.y > Math.abs(total.x) * 1.2) { this.HumanHold(g.player); return; }
-    if (!g.moved && total.magnitude < dp(16) && now - g.startTime < 0.4) {
+    if (!g.moved && total.magnitude < dp(16) && (PointerLog.duration(g.id) ?? now - g.startTime) < 0.4) {
       // tap on the hold box = hold, otherwise rotate (left third of a board rotates back)
       const w = this.ScreenToWorld(pos);
       const v = p.view;

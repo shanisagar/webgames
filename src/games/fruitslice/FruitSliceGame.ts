@@ -326,7 +326,8 @@ export class FruitSliceGame extends ArcadeGame {
     const C = UIKit.Center;
     this.shop = UIKit.node("Shop", parent).stretch();
     UIKit.dim(this.shop, 0.78);
-    const card = UIKit.card(this.shop, new V2(900, 960), Gold);
+    const card = UIKit.card(this.shop, new V2(900, 1000), Gold);
+    card.localScale = new V3(0.94, 0.94, 1);
     UIKit.glow(UIKit.at(UIKit.label(card, "BLADES & BACKGROUNDS", 50, Color.white), C, new V2(0, 410), new V2(860, 70)), Ink, 3);
     UIKit.img(card, "Star", Art.Star, Gold).rectTransform.place(C, new V2(-60, 340), new V2(56, 56));
     this.shopStars = UIKit.at(UIKit.label(card, "0", 46, Gold, TextAnchor.MiddleLeft), C, new V2(60, 340), new V2(200, 60));
@@ -348,7 +349,7 @@ export class FruitSliceGame extends ArcadeGame {
     UIKit.buttonAt(card, "<", C, new V2(-360, -150), new V2(100, 110), false, () => this.Browse(1, -1), 52).setAccent(Gold);
     UIKit.buttonAt(card, ">", C, new V2(360, -150), new V2(100, 110), false, () => this.Browse(1, 1), 52).setAccent(Gold);
     this.bgAction = UIKit.buttonAt(card, "EQUIP", C, new V2(0, -345), new V2(380, 90), false, () => this.ShopAction(1), 32);
-    UIKit.buttonAt(card, "CLOSE", C, new V2(0, -440), new V2(320, 80), true, () => this.OpenShop(false), 36).setAccent(Gold);
+    UIKit.buttonAt(card, "CLOSE", C, new V2(0, -435), new V2(320, 84), true, () => this.OpenShop(false), 36).setAccent(Gold);
     this.shop.setActive(false);
   }
 

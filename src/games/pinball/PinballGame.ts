@@ -391,7 +391,8 @@ export class PinballGame extends ArcadeGame {
   // ------------------------------------------------------------------ frame
 
   protected TickRun(dt: number) {
-    dt = Math.min(dt, 0.05);
+    dt = this.TestFixedDt > 0 ? this.TestFixedDt : Math.min(dt, 0.05 * Math.max(1, this.SpeedMultiplier));
+    this.TestFrame++;
     const sim = this.Sim;
     if (this.phase === "play") {
       if (this.BotTurn) this.bot!.think(sim, dt);
@@ -693,12 +694,15 @@ export class PinballGame extends ArcadeGame {
   TestAdvice() {
     if (this.State !== Phase.Playing || this.phase !== "play" || this.BotTurn) return null;
     this.testBot ??= new PinBot(PinBotLevels[2], 99);
-    return this.testBot.decide(this.Sim, Time.deltaTime || 1 / 60);
+    return this.testBot.decide(this.Sim, this.TestFixedDt || Time.deltaTime || 1 / 60);
   }
   TestInfo() {
-    return { state: this.State, phase: this.phase, cur: this.cur, mode: this.mode, balls: this.ballNo, scores: this.sims.map((s) => s.score), needLaunch: this.Sim?.needLaunch, ballsOnTable: this.Sim?.balls.length, missions: this.Sim?.missionsDone, multiball: this.Sim?.multiball };
+    return { state: this.State, phase: this.phase, cur: this.cur, mode: this.mode, balls: this.ballNo, scores: this.sims.map((s) => s.score), needLaunch: this.Sim?.needLaunch, ballsOnTable: this.Sim?.balls.length, missions: this.Sim?.missionsDone, multiball: this.Sim?.multiball, flippers: this.Sim?.flippers.map((f) => f.pressed), plunger: this.Sim?.plungerPull };
   }
   set TestSpeed(v: number) { this.SpeedMultiplier = v; }
+  /** Tests on very slow machines advance a fixed game time per rendered frame (slow motion, frame-locked input). */
+  TestFixedDt = 0;
+  TestFrame = 0;
 
   // ------------------------------------------------------------------ display
 

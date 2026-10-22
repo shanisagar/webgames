@@ -90,6 +90,7 @@ export class CarromGame extends ArcadeGame {
   private soundsThisFrame = 0;
   private attractT = 0; private attractShots = 0;
   private cueFlash = 0;
+  private lineK = 1;
 
   // HUD
   private cards: Card[] = [];
@@ -320,6 +321,10 @@ export class CarromGame extends ArcadeGame {
     }
     this.table.localPosition = new V3(cx, cy, 0);
     this.table.localScale = new V3(this.tableScale, this.tableScale, 1);
+    // LineRenderer widths are world units even in local space: scale the guide lines with the board (kit gap)
+    this.lineK = this.tableScale;
+    this.aimLine.widthMultiplier = 0.09 * this.lineK; this.coinLine.widthMultiplier = 0.09 * this.lineK;
+    this.deflLine.widthMultiplier = 0.07 * this.lineK; this.bounceLine.widthMultiplier = 0.07 * this.lineK;
     this.lamp.transform.localPosition = new V3(cx, cy, 0);
     this.lamp.transform.localScale = V3.one.mul(BoardHalf * 2 * this.tableScale * 1.6);
     const toHud = (x: number, y: number) => this.UI.WorldToHud(new V2(cx + x * this.tableScale, cy + y * this.tableScale));
@@ -783,7 +788,7 @@ export class CarromGame extends ArcadeGame {
       this.pullLine.setPosition(1, new V2(sx, sy).add(back.mul(RS + pl)));
       const pc = Color.lerp(Teal, Color.lerp(Gold, Red, Mathf.clamp01((this.power - 0.5) * 2)), Mathf.clamp01(this.power * 2));
       this.pullLine.color = pc.withAlpha(0.9);
-      this.pullLine.widthMultiplier = 0.16 + this.power * 0.14;
+      this.pullLine.widthMultiplier = (0.16 + this.power * 0.14) * this.lineK;
       const hp = this.UI.WorldToHud(this.TableToWorld(new V2(sx, sy).add(back.mul(RS + pl + 1.1))));
       this.powerText.rectTransform.anchoredPosition = hp;
       this.powerText.text = `${Math.round(this.power * 100)}%`;
