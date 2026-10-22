@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { portalSlugForHost } from "./platform/store";
+import { initNative } from "./platform/native";
 import { initTelemetry } from "./platform/telemetry";
 import { reloadForUpdate } from "./platform/update";
 
@@ -29,5 +30,6 @@ async function start() {
       <App />
     </StrictMode>,
   );
+  void initNative(); // Android / iOS app only: back button, background pause, screen wake lock
 }
 void start();

@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Shani Sagar Games</string>
+    <string name="title_activity_main">Shani Sagar Games</string>
+    <string name="package_name">com.shanisagar.games</string>
+    <string name="custom_url_scheme">com.shanisagar.games</string>
+    <!-- AdMob APPLICATION id (not an ad unit id). Real Android app id from the Unity build (NeonArcadeAds.asset).
+         Google's test app id: ca-app-pub-3940256099942544~3347511713. See docs/NATIVE-APPS.md. -->
+    <string name="admob_app_id">ca-app-pub-2503823450887306~9616402008</string>
+</resources>
