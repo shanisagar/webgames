@@ -17,6 +17,26 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "firewall",
+    name: "Firewall",
+    tagline: "Defend the core from a virus that learns.",
+    genre: "Strategy",
+    icon: "img/icons/firewall.webp",
+    feature: "img/features/firewall.webp",
+    description: "Tower defense against an adaptive virus: build and upgrade towers to guard the core while each wave studies your defenses and changes its route.",
+    component: lazy(() => import("./games/firewall")),
+  },
+  {
+    id: "swarmbreaker",
+    name: "Swarmbreaker",
+    tagline: "Outfight a hive mind that learns you.",
+    genre: "Action",
+    icon: "img/icons/swarmbreaker.webp",
+    feature: "img/features/swarmbreaker.webp",
+    description: "Twin-stick neon shooter against a hive mind that analyses how you play and adapts its tactics every wave. Dash, pick upgrades, survive.",
+    component: lazy(() => import("./games/swarmbreaker")),
+  },
+  {
     id: "bladetoss",
     name: "Blade Toss",
     tagline: "Throw. Stick. Don't hit a blade.",
