@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy
 
 on:
   push:
@@ -29,9 +29,25 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_POSTHOG_KEY: ${{ vars.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.VITE_POSTHOG_HOST }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_RELEASE: ${{ github.sha }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+      # Cloudflare Pages (main hosting once set up): needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CLOUDFLARE_PROJECT || 'webgames' }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Cloudflare secrets not set: skipping (GitHub Pages deploy still runs)."; exit 0
+          fi
+          npx --yes wrangler@4.147.0 pages project create "$PROJECT" --production-branch main 2>/dev/null || true
+          npx --yes wrangler@4.147.0 pages deploy dist --project-name "$PROJECT" --branch main --commit-dirty=true
 
   deploy:
     needs: build

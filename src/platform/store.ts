@@ -21,6 +21,8 @@ export interface ClientRecord {
   ads: ClientAds;
   site: ClientSite;
   games: ClientGame[];
+  /** Custom domains (lowercase host names) that open this client's portal. */
+  domains?: string[];
   updated_at?: string;
 }
 
@@ -47,6 +49,21 @@ export async function loadPortal(slug: string): Promise<ClientConfig | null> {
   });
   if (!res.ok) throw new Error(`Could not load this portal (${res.status}).`);
   return (await res.json()) as ClientConfig | null;
+}
+
+/** Client portal for the current host name (a client's custom domain), or null for studio hosts. */
+export async function portalSlugForHost(host: string): Promise<string | null> {
+  host = host.toLowerCase();
+  if (!host || host === "localhost" || /(^|\.)(github\.io|pages\.dev)$/.test(host) || /^[\d.]+$/.test(host)) return null;
+  if (!supabaseConfigured) return localClients().find((c) => c.active && c.domains?.includes(host))?.slug ?? null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/portal_slug_for_host`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_host: host }),
+    });
+    return res.ok ? ((await res.json()) as string | null) : null;
+  } catch { return null; }
 }
 
 // ------------------------------------------------------------------ local demo mode
@@ -137,7 +154,7 @@ async function supabaseStore(): Promise<AdminStore> {
       return rows as ClientRecord[];
     },
     async save(r) {
-      const fields = { slug: r.slug, name: r.name, active: r.active, theme: r.theme, ads: r.ads, site: r.site };
+      const fields = { slug: r.slug, name: r.name, active: r.active, theme: r.theme, ads: r.ads, site: r.site, domains: r.domains ?? [] };
       const saved = check(r.id
         ? await sb.from("clients").update(fields).eq("id", r.id).select().single()
         : await sb.from("clients").insert(fields).select().single()) as ClientRecord;

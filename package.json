@@ -11,12 +11,20 @@
     "test": "esbuild scripts/check-levels.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/check-levels.mjs --log-level=warning && node node_modules/.cache/check-levels.mjs && esbuild src/games/emberripple/EmberRipple.check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/er-check.mjs --log-level=warning && node node_modules/.cache/er-check.mjs"
   },
   "dependencies": {
+    "@capacitor-community/admob": "8.2.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/splash-screen": "8.0.2",
+    "@sentry/browser": "10.76.0",
     "@supabase/supabase-js": "2.117.3",
     "phaser": "3.90.0",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.3",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "@vitejs/plugin-react": "5.0.2",
