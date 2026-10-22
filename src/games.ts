@@ -19,7 +19,7 @@ export const GAMES: GameEntry[] = [
   {
     id: "mahjongcalm",
     name: "Mahjong Calm",
-    tagline: "Match the tiles. Clear the board.",
+    tagline: "Match the pairs. Clear the board. Breathe.",
     genre: "Puzzle",
     icon: "img/icons/mahjongcalm.webp",
     description: "Classic Mahjong Solitaire with twelve layouts from Pyramid to the Turtle. Match free pairs, use hints, undo and shuffles, and relax to calm music. Every deal is solvable.",
@@ -28,7 +28,7 @@ export const GAMES: GameEntry[] = [
   {
     id: "carescape",
     name: "Car Escape",
-    tagline: "Tap. Drive out. Clear the lot.",
+    tagline: "Tap. Drive. Clear the parking jam!",
     genre: "Puzzle",
     icon: "img/icons/carescape.webp",
     description: "A parking-jam puzzle: tap cars to drive them out of a packed lot in the right order. Trucks, cones, move limits and handy undo, hint and tow boosters.",
