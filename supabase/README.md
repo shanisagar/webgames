@@ -6,7 +6,7 @@ your own browser.
 
 ## 1. Create the project
 1. Sign in at https://supabase.com and create a project (the free tier is enough).
-2. Open **SQL Editor**, paste all of [`migrations/0001_platform.sql`](migrations/0001_platform.sql) and run it.
+2. Open **SQL Editor**, paste all of [`migrations/0001_platform.sql`](migrations/0001_platform.sql) and run it, then do the same with each later file in [`migrations/`](migrations) in order (`0002_…`, `0003_…`).
 
 ## 2. Create your admin login
 1. **Authentication → Users → Add user**: enter your email and a password and tick *Auto confirm*.

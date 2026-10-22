@@ -35,8 +35,13 @@ export function toConfig(r: ClientRecord): ClientConfig {
 
 // ------------------------------------------------------------------ portal (read path, no SDK: one small fetch)
 
-/** Loads one client's portal config, or null if it doesn't exist or is switched off. */
+/** Loads one client's portal config, or null if it doesn't exist or is switched off. Games off platform-wide are left out. */
 export async function loadPortal(slug: string): Promise<ClientConfig | null> {
+  const [config, off] = await Promise.all([fetchPortal(slug), gamesOff()]);
+  return config && { ...config, games: (config.games ?? GAMES.map((g) => g.id)).filter((id) => !off.has(id)) };
+}
+
+async function fetchPortal(slug: string): Promise<ClientConfig | null> {
   if (!SLUG_RE.test(slug)) return null;
   if (!supabaseConfigured) {
     const r = localClients().find((c) => c.slug === slug && c.active);
@@ -64,6 +69,50 @@ export async function portalSlugForHost(host: string): Promise<string | null> {
     });
     return res.ok ? ((await res.json()) as string | null) : null;
   } catch { return null; }
+}
+
+// ------------------------------------------------------------------ game flags (platform-wide on/off per game)
+
+/**
+ * Games switched off for the whole platform: hidden from the studio site, every client portal and every embed,
+ * whatever each client has enabled. Games without a flag are on. With Supabase the flags live in the game_flags
+ * table; in local demo mode they come from public/game-flags.json (edit it and deploy) plus this browser's
+ * back-office changes.
+ */
+export type GameFlags = Record<string, boolean>;
+
+const LOCAL_FLAGS_KEY = "platform.gameFlags.v1";
+let offPromise: Promise<Set<string>> | null = null;
+
+export function gamesOff(): Promise<Set<string>> {
+  return (offPromise ??= readFlags()
+    .then((f) => new Set(Object.keys(f).filter((id) => f[id] === false)))
+    .catch(() => new Set<string>()));
+}
+
+async function readFlags(): Promise<GameFlags> {
+  if (supabaseConfigured) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_flags?select=game_id,enabled`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+    });
+    if (!res.ok) throw new Error(`Could not load the game flags (${res.status}).`);
+    return Object.fromEntries(((await res.json()) as { game_id: string; enabled: boolean }[]).map((r) => [r.game_id, r.enabled]));
+  }
+  return { ...(await fileFlags()), ...localFlags() };
+}
+
+/** public/game-flags.json: { "off": ["gameid", ...] }. */
+async function fileFlags(): Promise<GameFlags> {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}game-flags.json`, { cache: "no-cache" });
+    if (!res.ok) return {};
+    const off = ((await res.json()) as { off?: string[] }).off ?? [];
+    return Object.fromEntries(off.map((id) => [id, false]));
+  } catch { return {}; }
+}
+
+function localFlags(): GameFlags {
+  try { return JSON.parse(localStorage.getItem(LOCAL_FLAGS_KEY) ?? "{}") as GameFlags; } catch { return {}; }
 }
 
 // ------------------------------------------------------------------ local demo mode
@@ -111,6 +160,9 @@ export interface AdminStore {
   list(): Promise<ClientRecord[]>;
   save(r: ClientRecord): Promise<ClientRecord>;
   remove(id: string): Promise<void>;
+  /** Platform-wide game flags (missing = on). */
+  flags(): Promise<GameFlags>;
+  saveFlags(flags: GameFlags): Promise<void>;
 }
 
 const localStore: AdminStore = {
@@ -129,6 +181,11 @@ const localStore: AdminStore = {
     return rec;
   },
   async remove(id) { saveLocal(localClients().filter((c) => c.id !== id)); },
+  async flags() { return readFlags(); },
+  async saveFlags(flags) {
+    try { localStorage.setItem(LOCAL_FLAGS_KEY, JSON.stringify(flags)); } catch { /* ignore */ }
+    offPromise = null;
+  },
 };
 
 async function supabaseStore(): Promise<AdminStore> {
@@ -167,6 +224,15 @@ async function supabaseStore(): Promise<AdminStore> {
       return { ...saved, games: r.games };
     },
     async remove(id) { check(await sb.from("clients").delete().eq("id", id)); },
+    async flags() {
+      const rows = check(await sb.from("game_flags").select("game_id, enabled")) as { game_id: string; enabled: boolean }[];
+      return Object.fromEntries(rows.map((r) => [r.game_id, r.enabled]));
+    },
+    async saveFlags(flags) {
+      const rows = Object.entries(flags).map(([game_id, enabled]) => ({ game_id, enabled }));
+      if (rows.length) check(await sb.from("game_flags").upsert(rows));
+      offPromise = null;
+    },
   };
 }
 

@@ -3,7 +3,7 @@ import { GAMES, type GameEntry } from "../../games";
 import { EmbedTab } from "../embed/AdminEmbed";
 import { clientBrand } from "../Portal";
 import { Showcase } from "../Showcase";
-import { adminStore, SLUG_RE, toConfig, type AdminStore, type ClientGame, type ClientRecord } from "../store";
+import { adminStore, SLUG_RE, toConfig, type AdminStore, type ClientGame, type ClientRecord, type GameFlags } from "../store";
 import "./admin.css";
 
 const blank = (): ClientRecord => ({
@@ -64,9 +64,12 @@ function Dashboard({ store, user, onOut }: { store: AdminStore; user: string; on
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<ClientRecord | null>(null);
   const [filter, setFilter] = useState("");
+  const [view, setView] = useState<"clients" | "catalogue">("clients");
+  const [flags, setFlags] = useState<GameFlags>({});
 
   const reload = useCallback(async () => {
     try { setClients(await store.list()); setError(""); } catch (e) { setError((e as Error).message); setClients([]); }
+    try { setFlags(await store.flags()); } catch (e) { setError((e as Error).message); }
   }, [store]);
   useEffect(() => { void reload(); }, [reload]);
 
@@ -77,12 +80,17 @@ function Dashboard({ store, user, onOut }: { store: AdminStore; user: string; on
     <div className="adm">
       <header className="adm-bar">
         <strong>Back office</strong>
+        <nav className="adm-views">
+          <button className={view === "clients" ? "on" : ""} onClick={() => setView("clients")}>Clients</button>
+          <button className={view === "catalogue" ? "on" : ""} onClick={() => setView("catalogue")}>Game catalogue</button>
+        </nav>
         {store.mode === "local" && <span className="adm-badge" title="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to use the shared database">Local demo mode: changes stay in this browser</span>}
         <span className="adm-spacer" />
         <span className="adm-user">{user}</span>
         {store.mode === "supabase" && <button onClick={onOut}>Sign out</button>}
       </header>
       {error && <p className="adm-error adm-pad">{error}</p>}
+      {view === "catalogue" ? <Catalogue store={store} initial={flags} onSaved={setFlags} /> : (
       <div className="adm-body">
         <aside className="adm-list">
           <button className="adm-primary" onClick={() => { setSelected(""); setDraft(blank()); }}>+ New client</button>
@@ -98,7 +106,7 @@ function Dashboard({ store, user, onOut }: { store: AdminStore; user: string; on
         </aside>
         <main className="adm-main">
           {draft ? (
-            <Editor key={selected ?? "new"} store={store} initial={draft} onSaved={async (r) => { await reload(); open(r); }}
+            <Editor key={selected ?? "new"} store={store} initial={draft} flags={flags} onSaved={async (r) => { await reload(); open(r); }}
               onDeleted={async () => { setSelected(null); setDraft(null); await reload(); }} />
           ) : (
             <div className="adm-empty">
@@ -109,14 +117,67 @@ function Dashboard({ store, user, onOut }: { store: AdminStore; user: string; on
           )}
         </main>
       </div>
+      )}
+    </div>
+  );
+}
+
+/** Platform-wide feature flag per game: a game switched off here is hidden from the studio site, every portal and every embed. */
+function Catalogue({ store, initial, onSaved }: { store: AdminStore; initial: GameFlags; onSaved: (f: GameFlags) => void }) {
+  const [flags, setFlags] = useState(initial);
+  const [genre, setGenre] = useState("All");
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const isOn = (id: string) => flags[id] !== false;
+  const dirty = GAMES.some((g) => isOn(g.id) !== (initial[g.id] !== false));
+  const genres = ["All", ...new Set(GAMES.map((g) => g.genre))];
+  const shown = GAMES.filter((g) => genre === "All" || g.genre === genre);
+  const setMany = (ids: string[], on: boolean) => setFlags((f) => ({ ...f, ...Object.fromEntries(ids.map((id) => [id, on])) }));
+  const save = async () => {
+    setBusy(true); setStatus("");
+    const all = Object.fromEntries(GAMES.map((g) => [g.id, isOn(g.id)]));
+    try { await store.saveFlags(all); onSaved(all); setStatus("Saved. Players see the change on their next visit."); }
+    catch (e) { setStatus((e as Error).message); }
+    setBusy(false);
+  };
+  return (
+    <div className="adm-catalogue">
+      <div className="adm-head">
+        <div>
+          <h2>Game catalogue</h2>
+          <p className="adm-dim">Switch a game off to hide it everywhere: the studio site, every client portal and every embed. Clients keep their own selection; a game they have on comes back when you switch it on again.</p>
+        </div>
+        <div className="adm-actions">
+          {status && <span className="adm-status">{status}</span>}
+          <button className="adm-primary" onClick={save} disabled={busy || !dirty}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+      <div className="adm-games-tools">
+        <span><b>{GAMES.filter((g) => isOn(g.id)).length}</b> of {GAMES.length} games live</span>
+        <select value={genre} onChange={(e) => setGenre(e.target.value)}>{genres.map((g) => <option key={g}>{g}</option>)}</select>
+        <button onClick={() => setMany(shown.map((g) => g.id), true)}>Enable {genre === "All" ? "all" : genre}</button>
+        <button onClick={() => setMany(shown.map((g) => g.id), false)}>Disable {genre === "All" ? "all" : genre}</button>
+      </div>
+      <ul className="adm-games">
+        {shown.map((g) => (
+          <li key={g.id} className={isOn(g.id) ? "" : "off"}>
+            <img src={g.icon} alt="" width={44} height={44} />
+            <span><b>{g.name}</b><small>{g.genre}</small></span>
+            <label className="adm-switch">
+              <input type="checkbox" checked={isOn(g.id)} onChange={(e) => setMany([g.id], e.target.checked)} />
+              <span />
+            </label>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
 type Tab = "general" | "games" | "theme" | "ads" | "preview" | "embed";
 
-function Editor({ store, initial, onSaved, onDeleted }: {
-  store: AdminStore; initial: ClientRecord; onSaved: (r: ClientRecord) => void; onDeleted: () => void;
+function Editor({ store, initial, flags, onSaved, onDeleted }: {
+  store: AdminStore; initial: ClientRecord; flags: GameFlags; onSaved: (r: ClientRecord) => void; onDeleted: () => void;
 }) {
   const [r, setR] = useState(initial);
   const [tab, setTab] = useState<Tab>(initial.id ? "games" : "general");
@@ -168,12 +229,12 @@ function Editor({ store, initial, onSaved, onDeleted }: {
         ))}
       </nav>
       {tab === "general" && <General r={r} set={set} />}
-      {tab === "games" && <Games r={r} set={set} />}
+      {tab === "games" && <Games r={r} set={set} flags={flags} />}
       {tab === "theme" && <ThemeTab r={r} set={set} />}
       {tab === "ads" && <AdsTab r={r} set={set} />}
       {tab === "embed" && <EmbedTab saved={initial} />}
       {tab === "preview" && (
-        <div className="adm-preview" onClickCapture={(e) => e.preventDefault()}><div className="adm-preview-inner"><Showcase games={toConfig(r).games!.map((id) => GAMES.find((g) => g.id === id)!)} brand={{ ...clientBrand(toConfig(r)), base: `#/c/${r.slug}/` }} /></div></div>
+        <div className="adm-preview" onClickCapture={(e) => e.preventDefault()}><div className="adm-preview-inner"><Showcase games={toConfig(r).games!.filter((id) => flags[id] !== false).map((id) => GAMES.find((g) => g.id === id)!)} brand={{ ...clientBrand(toConfig(r)), base: `#/c/${r.slug}/` }} /></div></div>
       )}
     </div>
   );
@@ -218,7 +279,7 @@ function DomainsInput({ value, onChange }: { value: string[]; onChange: (v: stri
 
 const autoSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 41);
 
-function Games({ r, set }: TabProps) {
+function Games({ r, set, flags }: TabProps & { flags: GameFlags }) {
   const [genre, setGenre] = useState("All");
   const byId = useMemo(() => new Map(GAMES.map((g) => [g.id, g])), []);
   const genres = ["All", ...new Set(GAMES.map((g) => g.genre))];
@@ -248,7 +309,7 @@ function Games({ r, set }: TabProps) {
           return (
             <li key={cg.game_id} className={cg.enabled ? "" : "off"}>
               <img src={g.icon} alt="" width={44} height={44} />
-              <span><b>{g.name}</b><small>{g.genre}</small></span>
+              <span><b>{g.name}</b><small>{g.genre}{flags[g.id] === false && " · off in the game catalogue"}</small></span>
               <span className="adm-order">
                 <button aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
                 <button aria-label="Move down" onClick={() => move(i, 1)} disabled={i === list.length - 1}>↓</button>

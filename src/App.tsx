@@ -7,6 +7,7 @@ import { EmbedGame } from "./platform/embed/EmbedGame";
 import { GameDetail } from "./platform/GameDetail";
 import { GameFrame, Notice, Portal } from "./platform/Portal";
 import { Showcase, STUDIO } from "./platform/Showcase";
+import { gamesOff } from "./platform/store";
 
 /** Development only: #/dev/<folder> opens any game folder (src/games/<folder>/index.tsx), registered or not. */
 const devGames = import.meta.env.DEV ? import.meta.glob<{ default: ComponentType }>("./games/*/index.tsx") : {};
@@ -68,10 +69,15 @@ function Studio({ id }: { id: string }) {
     if (AdService.started) location.reload();
     setClient(null);
   }
+  // Games switched off platform-wide (back office → Game catalogue) are hidden here too.
+  const [off, setOff] = useState<Set<string> | null>(null);
+  useEffect(() => { void gamesOff().then(setOff); }, []);
+  const games = useMemo(() => GAMES.filter((g) => !off?.has(g.id)), [off]);
+  if (!off) return <div className="loading">Loading…</div>;
   // The studio site is a showcase: games play only inside a client portal or a client embed (single-game builds aside).
-  if (!id) return <Showcase games={GAMES} brand={studioBrand} playable={false} />;
-  const game = GAMES.find((g) => g.id === id);
+  if (!id) return <Showcase games={games} brand={studioBrand} playable={false} />;
+  const game = games.find((g) => g.id === id);
   if (!game) return <Notice title="Game not found" text={`There is no game called "${id}".`} />;
   if (ONLY_GAME) return <GameFrame game={game} back="#/" />;
-  return <GameDetail game={game} games={GAMES} />;
+  return <GameDetail game={game} games={games} />;
 }
