@@ -17,6 +17,16 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "emberripple",
+    name: "Ember & Ripple",
+    tagline: "Two elements. One temple.",
+    genre: "Platformer",
+    icon: "img/icons/emberripple.webp",
+    feature: "img/features/emberripple.webp",
+    description: "A two-hero puzzle platformer: guide fire spirit Ember and water spirit Ripple through 20 temple levels of lava, water, goo, levers, lifts and stones. Play together on one keyboard or swap between them on your phone.",
+    component: lazy(() => import("./games/emberripple")),
+  },
+  {
     id: "mahjongcalm",
     name: "Mahjong Calm",
     tagline: "Match the pairs. Clear the board. Breathe.",
