@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from
 import { GAMES } from "./games";
 import { AdService } from "./kit/ads";
 import { currentClient, setClient } from "./kit/theme";
+import { installEmbedBridge } from "./platform/embed/bridge";
+import { EmbedGame } from "./platform/embed/EmbedGame";
 import { GameFrame, Notice, Portal } from "./platform/Portal";
 import { Showcase, STUDIO } from "./platform/Showcase";
 
@@ -10,10 +12,15 @@ const devGames = import.meta.env.DEV ? import.meta.glob<{ default: ComponentType
 
 /** The back office is its own chunk (it pulls in the Supabase SDK). */
 const Admin = lazy(() => import("./platform/admin/Admin"));
+/** Developer page for operators embedding the games. */
+const EmbedDocs = lazy(() => import("./platform/embed/EmbedDocs"));
 
 /** Build with VITE_GAME=<id> to ship a single game that opens straight away (for embedding or previews). */
 const ONLY_GAME = import.meta.env.VITE_GAME as string | undefined;
-const currentRoute = () => ONLY_GAME ?? decodeURIComponent(location.hash.replace(/^#\/?/, "")).replace(/\/$/, "");
+/** The hash path without its query: "#/embed/slide2048?client=demo" → "embed/slide2048". */
+const currentRoute = () => ONLY_GAME ?? decodeURIComponent(location.hash.replace(/^#\/?/, "").split("?")[0]).replace(/\/$/, "");
+/** Query parameters inside the hash (after "?"). */
+const hashQuery = () => new URLSearchParams(location.hash.split("?").slice(1).join("?"));
 
 const studioBrand = { ...STUDIO, base: "#/" };
 
@@ -22,11 +29,15 @@ const studioBrand = { ...STUDIO, base: "#/" };
  *   #/                 studio showcase          #/<game>            a game
  *   #/c/<client>       a client's portal        #/c/<client>/<game> a game inside that portal
  *   #/admin            back office
+ *   #/embed/<game>[?client=<slug>&sound=0]   bare game for an operator's iframe
+ *   #/embed/portal/<client>[/<game>]          a client's portal inside an iframe
+ *   #/embed-docs       how to embed (snippets, events, commands)
  */
 export default function App() {
   const [route, setRoute] = useState(currentRoute);
+  const [hash, setHash] = useState(() => location.hash); // also re-renders when only the hash query changes
   useEffect(() => {
-    const onHash = () => { setRoute(currentRoute()); window.scrollTo(0, 0); };
+    const onHash = () => { setRoute(currentRoute()); setHash(location.hash); window.scrollTo(0, 0); };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -36,6 +47,15 @@ export default function App() {
   if (DevGame) return <Suspense fallback={<div className="loading">Loading…</div>}><DevGame /></Suspense>;
 
   const parts = route.split("/");
+  if (parts[0] === "embed" && parts[1]) {
+    const q = hashQuery();
+    const portal = parts[1] === "portal";
+    const client = portal ? parts[2] ?? null : q.get("client");
+    installEmbedBridge({ muted: q.get("sound") === "0", view: portal ? "portal" : "game", game: portal ? null : parts[1], client });
+    if (portal) return <Portal slug={parts[2] ?? ""} gameId={parts[3] ?? ""} embedded />;
+    return <EmbedGame key={hash} gameId={parts[1]} slug={client} />;
+  }
+  if (parts[0] === "embed-docs") return <Suspense fallback={<div className="loading">Loading…</div>}><EmbedDocs /></Suspense>;
   if (parts[0] === "c" && parts[1]) return <Portal slug={parts[1]} gameId={parts[2] ?? ""} />;
   if (parts[0] === "admin") return <Suspense fallback={<div className="loading">Loading…</div>}><Admin /></Suspense>;
   return <Studio id={route} />;

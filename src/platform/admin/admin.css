@@ -85,3 +85,16 @@
   .adm-list { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; overflow: auto; }
   .adm-main { padding: 16px; }
 }
+
+.adm-embed { max-width: 860px; }
+.adm-embed h3 { margin: 22px 0 10px; font-size: 16px; }
+.adm-embed a { color: var(--a); }
+.adm-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.adm .adm-seg button { border: 0; border-radius: 0; background: transparent; color: var(--dim); }
+.adm .adm-seg button.on { background: var(--a); color: #04121a; font-weight: 700; }
+.adm-snippet { border: 1px solid var(--line); border-radius: 12px; background: #0a0d1a; overflow: hidden; }
+.adm-snippet-bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line); font-size: 13px; word-break: break-all; }
+.adm .adm-snippet-bar button { flex: none; padding: 3px 12px; font-size: 13px; }
+.adm-snippet pre { margin: 0; padding: 12px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #bfe9f5; }
+.adm-embed .adm-games small { word-break: break-all; }

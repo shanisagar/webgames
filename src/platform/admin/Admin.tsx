@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { GAMES, type GameEntry } from "../../games";
+import { EmbedTab } from "../embed/AdminEmbed";
 import { clientBrand } from "../Portal";
 import { Showcase } from "../Showcase";
 import { adminStore, SLUG_RE, toConfig, type AdminStore, type ClientGame, type ClientRecord } from "../store";
@@ -112,7 +113,7 @@ function Dashboard({ store, user, onOut }: { store: AdminStore; user: string; on
   );
 }
 
-type Tab = "general" | "games" | "theme" | "ads" | "preview";
+type Tab = "general" | "games" | "theme" | "ads" | "preview" | "embed";
 
 function Editor({ store, initial, onSaved, onDeleted }: {
   store: AdminStore; initial: ClientRecord; onSaved: (r: ClientRecord) => void; onDeleted: () => void;
@@ -162,7 +163,7 @@ function Editor({ store, initial, onSaved, onDeleted }: {
         </div>
       </div>
       <nav className="adm-tabs">
-        {(["general", "games", "theme", "ads", "preview"] as Tab[]).map((t) => (
+        {(["general", "games", "theme", "ads", "preview", "embed"] as Tab[]).map((t) => (
           <button key={t} className={t === tab ? "on" : ""} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
         ))}
       </nav>
@@ -170,6 +171,7 @@ function Editor({ store, initial, onSaved, onDeleted }: {
       {tab === "games" && <Games r={r} set={set} />}
       {tab === "theme" && <ThemeTab r={r} set={set} />}
       {tab === "ads" && <AdsTab r={r} set={set} />}
+      {tab === "embed" && <EmbedTab saved={initial} />}
       {tab === "preview" && (
         <div className="adm-preview" onClickCapture={(e) => e.preventDefault()}><div className="adm-preview-inner"><Showcase games={toConfig(r).games!.map((id) => GAMES.find((g) => g.id === id)!)} brand={{ ...clientBrand(toConfig(r)), base: `#/c/${r.slug}/` }} /></div></div>
       )}
@@ -196,8 +198,22 @@ function General({ r, set }: TabProps) {
       <Field label="Tagline"><input value={r.site.tagline ?? ""} placeholder="Play instantly in your browser." onChange={(e) => site({ tagline: e.target.value })} /></Field>
       <Field label="Footer"><input value={r.site.footer ?? ""} placeholder={`© ${r.name}`} onChange={(e) => site({ footer: e.target.value })} /></Field>
       <Field label="Logo links to" hint="Optional: the operator's own website."><input type="url" value={r.site.homeUrl ?? ""} onChange={(e) => site({ homeUrl: e.target.value || undefined })} /></Field>
+      <Field label="Custom domains" hint="Optional, comma-separated, e.g. games.client.com. Point each domain at the site (see docs/HOSTING.md); visiting it opens this portal.">
+        <DomainsInput value={r.domains ?? []} onChange={(domains) => set({ domains })} />
+      </Field>
     </div>
   );
+}
+
+/** Comma-separated host names; parsed on blur so typing commas and spaces isn't fought by re-renders. */
+function DomainsInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [text, setText] = useState(value.join(", "));
+  const parse = () => {
+    const list = text.split(/[,\s]+/).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter(Boolean);
+    onChange([...new Set(list)]);
+    setText(list.join(", "));
+  };
+  return <input value={text} placeholder="games.client.com" onChange={(e) => setText(e.target.value)} onBlur={parse} />;
 }
 
 const autoSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 41);

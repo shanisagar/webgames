@@ -1,3 +1,4 @@
+import { GameEvents } from "../../../kit/events";
 import { LevelData } from "../core/level";
 import { getLevel } from "../core/levels";
 import { PuzzleBoard } from "../core/puzzleBoard";
@@ -65,6 +66,8 @@ export class GameController {
     this.board = board;
     this.loadLevel(Save.currentLevel);
     this.goToMenu();
+    GameEvents.setGame("arrowpuzzle");
+    GameEvents.emit({ type: "ready", game: "arrowpuzzle" });
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -88,6 +91,7 @@ export class GameController {
     this.board.setInsets(0.16, 0.14);
     ui.set({ screen: "hud", overlay: null, tutorial: tutorialText(this.levelNumber), win: null });
     toast(loveNote(this.levelNumber), 3.8);
+    GameEvents.emit({ type: "start", game: "arrowpuzzle" });
   }
 
   playLevel(number: number) {
@@ -117,6 +121,7 @@ export class GameController {
     ui.set({ screen: "hud" });
     this.refresh();
     Sfx.play("hint");
+    GameEvents.emit({ type: "revive", game: "arrowpuzzle" });
   }
 
   /** Escape / Android back: close the top overlay, then back out of the current screen. */
@@ -224,6 +229,8 @@ export class GameController {
     }
     const time = (performance.now() - this.levelStart) / 1000;
     ui.set({ screen: "win", win: { stars, time, mistakes: this.mistakes, bonusHint }, saveVersion: ui.get().saveVersion + 1 });
+    // Score = the level just cleared.
+    GameEvents.emit({ type: "end", game: "arrowpuzzle", score: this.levelNumber, victory: true, stars, seconds: Math.round(time) });
   }
 
   private async loseSequence() {
@@ -235,6 +242,8 @@ export class GameController {
     if (run !== this.run) return;
     Sfx.play("lose");
     ui.set({ screen: "lose", canContinue: !this.continueUsed });
+    const seconds = Math.round((performance.now() - this.levelStart) / 1000);
+    GameEvents.emit({ type: "end", game: "arrowpuzzle", score: this.levelNumber, victory: false, stars: 0, seconds });
   }
 
   // ------------------------------------------------------------------ settings

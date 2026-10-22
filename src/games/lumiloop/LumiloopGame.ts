@@ -1,4 +1,4 @@
-import { AdService, applyClientTheme, Behaviour, GameNav, Camera, Color, GameInfo, GameObject, Gamepad, Keyboard, Mathf, Random, Time, V2 } from "../../kit";
+import { AdService, applyClientTheme, Behaviour, GameEvents, GameNav, Camera, Color, GameInfo, GameObject, Gamepad, Keyboard, Mathf, Random, Time, V2 } from "../../kit";
 import { Arena } from "./Arena";
 import { Comet } from "./Comet";
 import { EntityKind, Palette, Rules, Save, syncPal } from "./Core";
@@ -103,6 +103,8 @@ export class LumiloopGame extends Behaviour {
     this.ui.MenuPressed = () => this.LeaveGameOver(() => this.EnterTitle());
 
     this.EnterTitle();
+    GameEvents.setGame("lumiloop");
+    GameEvents.emit({ type: "ready", game: "lumiloop" });
   }
 
   /** Client theming (ArcadeGame.boot): accent colours and backgrounds, plus the kit palette for panels and text. */
@@ -190,22 +192,25 @@ export class LumiloopGame extends Behaviour {
       this.ui.Hint(null);
       this.ui.Announce("GO!", Palette.Comet);
     }
+    GameEvents.emit({ type: "start", game: "lumiloop" });
   }
 
-  private Pause() {
+  Pause() {
     if (this.Current !== State.Playing) return;
     this.Current = State.Paused;
     this.input.Reset();
     Synth.Duck(true);
     this.ui.ShowPause(true);
+    GameEvents.emit({ type: "pause", game: "lumiloop" });
   }
 
-  private Resume() {
+  Resume() {
     if (this.Current !== State.Paused) return;
     this.Current = State.Playing;
     Synth.Duck(false);
     this.ui.ShowPause(false);
     this.comet.MakeInvulnerable(0.8); // a moment to re-orient
+    GameEvents.emit({ type: "resume", game: "lumiloop" });
   }
 
   private Die() {
@@ -248,6 +253,7 @@ export class LumiloopGame extends Behaviour {
       BiggestLoop: this.biggestLoop,
       BestCombo: this.bestCombo,
     }, this.revived ? null : () => this.ReviveFromAd());
+    GameEvents.emit({ type: "end", game: "lumiloop", score: this.score, victory: false, stars: null, seconds: Math.round(this.runTime) });
   }
 
   /** Rewarded continue (once per run): 60% light back, a shockwave and a moment of invulnerability. */
@@ -268,6 +274,7 @@ export class LumiloopGame extends Behaviour {
     Synth.Play(Cue.Start);
     this.ui.ShowHud();
     this.ui.Announce("REVIVED!", Palette.Comet);
+    GameEvents.emit({ type: "revive", game: "lumiloop" });
   }
 
   /** Remote announcements (LiveConfig) are a native service: the web has none. */
