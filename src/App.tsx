@@ -1,5 +1,8 @@
-import { Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from "react";
 import { GAMES } from "./games";
+
+/** Development only: #/dev/<folder> opens any game folder (src/games/<folder>/index.tsx), registered or not. */
+const devGames = import.meta.env.DEV ? import.meta.glob<{ default: ComponentType }>("./games/*/index.tsx") : {};
 
 /** Build with VITE_GAME=<id> to ship a single game that opens straight away (for embedding or previews). */
 const ONLY_GAME = import.meta.env.VITE_GAME as string | undefined;
@@ -13,6 +16,10 @@ export default function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  const devLoader = id.startsWith("dev/") ? devGames[`./games/${id.slice(4)}/index.tsx`] : undefined;
+  const DevGame = useMemo(() => (devLoader ? lazy(devLoader) : null), [devLoader]);
+  if (DevGame) return <Suspense fallback={<div className="loading">Loading…</div>}><DevGame /></Suspense>;
 
   const game = GAMES.find((g) => g.id === id);
   if (game) {
