@@ -17,6 +17,36 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "ghostline",
+    name: "Ghostline",
+    tagline: "Infiltrate. Steal the data. Stay unseen.",
+    genre: "Action",
+    icon: "img/icons/ghostline.webp",
+    feature: "img/features/ghostline.webp",
+    description: "Stealth infiltration: sneak through generated facilities, dodge guard vision cones, steal the data shards and reach the exit using decoys and a cloak.",
+    component: lazy(() => import("./games/ghostline")),
+  },
+  {
+    id: "neuralsiege",
+    name: "Neural Siege",
+    tagline: "Outthink a machine that thinks ahead.",
+    genre: "Board",
+    icon: "img/icons/neuralsiege.webp",
+    feature: "img/features/neuralsiege.webp",
+    description: "A strategy board duel against NEXUS, an AI that searches moves ahead and taunts you as it climbs through ten tiers of difficulty.",
+    component: lazy(() => import("./games/neuralsiege")),
+  },
+  {
+    id: "voltrace",
+    name: "Voltrace",
+    tagline: "Anti-gravity racing vs AI rivals.",
+    genre: "Racing",
+    icon: "img/icons/voltrace.webp",
+    feature: "img/features/voltrace.webp",
+    description: "Neon anti-gravity racing on generated tracks against five AI rivals. Hit boost pads, draft, and climb the leagues.",
+    component: lazy(() => import("./games/voltrace")),
+  },
+  {
     id: "firewall",
     name: "Firewall",
     tagline: "Defend the core from a virus that learns.",
