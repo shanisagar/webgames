@@ -77,13 +77,13 @@ export function renderMazePromo(kind: "icon" | "feature") {
     ctx.fillRect(0, 0, 380, H);
     // big characters
     glowDisc(ctx, 700, 300, 170, "rgba(143,226,60,0.3)");
-    for (let i = 0; i < 5; i++) ctx.drawImage(dot, 770 + i * 44, 292, 30, 30);
-    ctx.drawImage(tinted(PelletSprite(), Pal.hex(0xc0d4ff)), 990, 280, 54, 54);
+    for (let i = 0; i < 4; i++) ctx.drawImage(dot, 770 + i * 44, 292, 30, 30);
+    ctx.drawImage(tinted(PelletSprite(), Pal.hex(0xc0d4ff)), 952, 280, 54, 54);
     ctx.drawImage(img(HeroSprite(HeroGreen, 2)), 600, 200, 200, 200);
     chaser(ctx, 0, 520, 160, 120, 1);
     chaser(ctx, 1, 900, 120, 100, -1);
     chaser(ctx, 2, 930, 430, 96, -1);
-    ctx.drawImage(img(FruitSprite(0)), 840, 380, 80, 80);
+    ctx.drawImage(img(FruitSprite(0)), 760, 400, 76, 76);
     // title
     ctx.save();
     ctx.font = '900 84px "Arial Rounded MT Bold", Arial, sans-serif';
