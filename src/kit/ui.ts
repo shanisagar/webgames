@@ -424,7 +424,8 @@ export class Image {
     k *= Math.min(1, pw / Math.max(1e-3, (l + r) * k), ph / Math.max(1e-3, (t + b) * k));
     const sw = src.width, sh = src.height;
     const sx = [0, l, sw - r, sw], sy = [0, t, sh - b, sh];
-    const dx = [0, l * k, pw - r * k, pw], dy = [0, t * k, ph - b * k, ph];
+    // whole-pixel edges: overlapping pieces would draw translucent pixels twice and show seams
+    const dx = [0, Math.round(l * k), Math.round(pw - r * k), pw], dy = [0, Math.round(t * k), Math.round(ph - b * k), ph];
     // assemble the nine pieces on a scratch canvas, then tint in one pass
     const buf = sliceScratch(pw, ph);
     const bctx = buf.getContext("2d")!;
@@ -434,7 +435,7 @@ export class Image {
     for (let iy = 0; iy < 3; iy++)
       for (let ix = 0; ix < 3; ix++) {
         const sW = sx[ix + 1] - sx[ix], sH = sy[iy + 1] - sy[iy], dW = dx[ix + 1] - dx[ix], dH = dy[iy + 1] - dy[iy];
-        if (sW > 0 && sH > 0 && dW > 0 && dH > 0) bctx.drawImage(src, sx[ix], sy[iy], sW, sH, dx[ix], dy[iy], dW + 0.5, dH + 0.5);
+        if (sW > 0 && sH > 0 && dW > 0 && dH > 0) bctx.drawImage(src, sx[ix], sy[iy], sW, sH, dx[ix], dy[iy], dW, dH);
       }
     ctx.globalCompositeOperation = "source-over";
     ctx.clearRect(0, 0, pw, ph);

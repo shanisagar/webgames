@@ -17,6 +17,35 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "sunnysolitaire",
+    name: "Sunny Solitaire",
+    tagline: "Classic Klondike, bright and breezy.",
+    genre: "Card",
+    icon: "img/icons/sunnysolitaire.webp",
+    feature: "img/features/sunnysolitaire.webp",
+    description: "Classic Klondike solitaire with Draw 1 or Draw 3, tap-to-move, drag and drop, hints, undo and a satisfying win cascade.",
+    component: lazy(() => import("./games/sunnysolitaire")),
+  },
+  {
+    id: "pixelcross",
+    name: "Pixel Cross",
+    tagline: "Solve the numbers. Reveal the picture.",
+    genre: "Puzzle",
+    icon: "img/icons/pixelcross.webp",
+    description: "Picture-logic nonograms: use the row and column clues to fill the grid and reveal a hidden pixel picture. Three hearts per puzzle.",
+    component: lazy(() => import("./games/pixelcross")),
+  },
+  {
+    id: "melodytiles",
+    name: "Melody Tiles",
+    tagline: "Tap the tiles. Play the song.",
+    genre: "Music",
+    icon: "img/icons/melodytiles.webp",
+    feature: "img/features/melodytiles.webp",
+    description: "Tap the black tiles in time to play famous melodies note by note. Hold the long tiles, keep the rhythm and unlock new songs.",
+    component: lazy(() => import("./games/melodytiles")),
+  },
+  {
     id: "bubblebloom",
     name: "Bubble Bloom",
     tagline: "Pop bubbles. Free the flowers.",

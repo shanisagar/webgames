@@ -104,6 +104,8 @@ class SfxEngine {
   private duck = 1;
   private targetDuck = 1;
   private musicFade = 0;
+  /** Silences the soundtrack (AudioSource.mute on the music loops), e.g. while a music game plays its own notes. */
+  musicMuted = false;
   private loops: LoopSource[] = [];
   private style: MusicStyle = DefaultMusic;
   /** Mutes everything while a full-screen ad plays. */
@@ -170,7 +172,7 @@ class SfxEngine {
     this.duck = Mathf.moveTowards(this.duck, this.targetDuck, dt * 1.5);
     this.musicFade = Mathf.moveTowards(this.musicFade, Settings.Music ? 1 : 0, dt * 0.8);
     const muted = this.paused ? 0 : 1;
-    const master = MUSIC_VOLUME * this.duck * this.musicFade * muted;
+    const master = MUSIC_VOLUME * this.duck * this.musicFade * muted * (this.musicMuted ? 0 : 1);
     if (this.calm && this.ctx) {
       this.calm.gain.setTargetAtTime(master, this.ctx.currentTime, 0.03);
       this.drive!.gain.setTargetAtTime(master * this.intensity, this.ctx.currentTime, 0.03);
@@ -369,6 +371,8 @@ export const Sfx = {
   playClip: (clip: AudioClip | null | undefined, volume = 1, pitch = 1) => engine.playClip(clip, volume, pitch),
   setIntensity: (v: number) => engine.setIntensity(v),
   duck: (on: boolean) => engine.duckMusic(on),
+  /** Mutes or unmutes the soundtrack; effects keep playing. */
+  setMusicMuted: (on: boolean) => { engine.musicMuted = on; },
   createLoop: (clip: AudioClip) => engine.createLoop(clip),
   make,
   sinP, sawP, sqrP, triP, glide, env,
