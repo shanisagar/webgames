@@ -17,6 +17,15 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "carescape",
+    name: "Car Escape",
+    tagline: "Tap. Drive out. Clear the lot.",
+    genre: "Puzzle",
+    icon: "img/icons/carescape.webp",
+    description: "A parking-jam puzzle: tap cars to drive them out of a packed lot in the right order. Trucks, cones, move limits and handy undo, hint and tow boosters.",
+    component: lazy(() => import("./games/carescape")),
+  },
+  {
     id: "wordwonder",
     name: "Word Wonder",
     tagline: "Connect letters. Unlock the wonders.",
