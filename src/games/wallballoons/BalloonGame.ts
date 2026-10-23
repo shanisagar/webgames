@@ -27,6 +27,7 @@ export class BalloonGame extends WallGame {
   private balloons: Balloon[] = [];
   private back: SpriteRenderer[] = [];
   private sky!: SpriteRenderer;
+  private spot!: SpriteRenderer;
   private valance: SpriteRenderer[] = [];
   private counter: SpriteRenderer[] = [];
   private plush: SpriteRenderer[] = [];
@@ -107,6 +108,7 @@ export class BalloonGame extends WallGame {
     const r = this.root;
     this.sky = CasualLook.cover(r, CasualArt.gradient(Pal.hex(0x1a1428), Pal.hex(0x3a2a50), Pal.hex(0xffd0a0).withAlpha(0.25)), -900);
     for (let i = 0; i < 6; i++) this.back.push(Art.spr(r, "Stripes", BalloonArt.Stripes(), Color.white, 1, -880, Art.Flat));
+    this.spot = Art.spr(r, "Spot", Art.Glow, Pal.hex(0xffc890).withAlpha(0.32), 1, -870, Art.Additive);
     for (let i = 0; i < 6; i++) this.valance.push(Art.spr(r, "Valance", BalloonArt.Valance(), Color.white, 1, 500, Art.Flat));
     for (let i = 0; i < 26; i++) this.bulbs.push(Art.spr(r, "Bulb", Art.Disc, Pal.hex(0xfff2b0), 0.3, 502, Art.Flat));
     for (let i = 0; i < 6; i++) this.counter.push(Art.spr(r, "Counter", BalloonArt.Counter(), Color.white, 1, 400, Art.Flat));
@@ -181,8 +183,11 @@ export class BalloonGame extends WallGame {
     this.valance.forEach((a, i) => { a.transform.localScale = new V3(tw, tw, 1); a.transform.localPosition = new V3(-W2 + tw * (i + 0.5), H2 - tw * 0.375 + 0.4, 0); });
     this.bulbs.forEach((b, i) => { const x = -W2 + 0.5 + (i + 0.5) * ((V.x - 1) / this.bulbs.length); b.transform.localPosition = new V3(x, H2 - tw * 0.75 + 0.5 - Math.sin((i / (this.bulbs.length - 1)) * Math.PI * 4) * 0.0, 0); });
     // counter along the bottom with prizes on it
+    this.spot.transform.localPosition = new V3(0, 0.5, 0);
+    this.spot.transform.localScale = new V3(V.x * 1.1, V.y * 1.6, 1);
     const ch = 2.2;
-    this.counter.forEach((c, i) => { c.transform.localScale = new V3(tw, ch * 2, 1); c.transform.localPosition = new V3(-W2 + tw * (i + 0.5), -H2 + ch / 2 - 0.15 + (H2 - 9 < 0 ? 0 : -(H2 - 9)), 0); });
+    const cTop = -9 + ch - 0.15, cBot = Math.min(-9, -H2) - 0.3;
+    this.counter.forEach((c, i) => { c.transform.localScale = new V3(tw, (cTop - cBot) * 2, 1); c.transform.localPosition = new V3(-W2 + tw * (i + 0.5), (cTop + cBot) / 2, 0); });
     const top = -9 + ch - 0.15 - 0.05;
     this.plush.forEach((p, i) => {
       const x = -W2 + 1.4 + (i + 0.5) * ((V.x - 2.8) / this.plush.length);

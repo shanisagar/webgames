@@ -190,8 +190,9 @@ export class DuckGame extends WallGame {
     // reeds and water
     const tile = V.x / 4 + 0.05;
     this.backReeds.forEach((r, i) => { r.transform.localScale = new V3(tile, tile * 0.85, 1); r.transform.localPosition = new V3(-W2 + tile * (i + 0.5), -4.4, 0); });
-    this.water.transform.localScale = new V3(V.x + 1, 9, 1);
-    this.water.transform.localPosition = new V3(0, -6.6, 0);
+    const wTop = -4.35, wBot = Math.min(-8.8, -H2 - 0.5);
+    this.water.transform.localScale = new V3(V.x + 1, (wTop - wBot) / 0.25, 1);
+    this.water.transform.localPosition = new V3(0, (wTop + wBot) / 2, 0);
     this.frontReeds.forEach((r, i) => {
       r.transform.localScale = new V3(tile * (i % 2 ? -1 : 1), tile * 0.8, 1);
       r.transform.localPosition = new V3(-W2 + tile * (i + 0.5), -H2 + tile * 0.8 * 0.375 * 0.75 - 0.2, 0);

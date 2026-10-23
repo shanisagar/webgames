@@ -359,8 +359,10 @@ export class LagoriGame extends WallGame {
   private Arrive(l: Lane, s: Stone) {
     s.state = "pile"; s.x = l.cx; s.z = PileZ; s.h = s.i * StoneT * 0.9; s.rot = 0;
     l.placed++;
-    l.stonesHome++;
     l.wobble = 1;
+    // stones flying back after the rival won the stack are not a rebuild
+    if (l.phase !== "rebuild") return;
+    l.stonesHome++;
     Sfx.playClip(this.clackClip, 0.8, 0.85 + s.i * 0.05);
     this.fx.sparkle(this.StonePos(s), StoneCols[s.i], 5, 0.8, 0.3);
     if (l.placed >= 7) this.StackDone(l);
