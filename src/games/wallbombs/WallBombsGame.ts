@@ -499,7 +499,7 @@ export class WallBombsGame extends ArcadeGame {
     this.Fx.kick(0.8, 0.4);
     this.Back.Flash(Pal.hex(0xff7a2f), 0.4);
     this.Hitstop(0.06);
-    if (this.Duel) this.UI.Float(b.pos.add(new V2(0, -b.r - 0.8)), `-${BoomCost}`, Pal.Danger, 2);
+    if (this.Duel) this.UI.Float(b.pos.add(new V2(0, -b.r * 2.3)), `-${BoomCost}`, Pal.Danger, 2);
     if (!this.Duel && !this.ambient && this.lives <= 0) this.EndRound("OUT OF LIVES!");
   }
 
@@ -583,7 +583,7 @@ export class WallBombsGame extends ArcadeGame {
       for (let i = 0; i <= n; i++) pts.push(path((i / n) * shown));
       v.fuse.positionCount = pts.length;
       v.fuse.setPositions(pts);
-      v.fuse.widthMultiplier = 0.11;
+      v.fuse.widthMultiplier = 0.2 * s;
       const tip = pts[pts.length - 1];
       v.spark.transform.localPosition = new V3(tip.x, tip.y, 0);
       v.sparkCore.transform.localPosition = new V3(tip.x, tip.y, 0);
@@ -603,26 +603,28 @@ export class WallBombsGame extends ArcadeGame {
       if (!bm.on) continue;
       bm.t += dt;
       const k = bm.t;
-      if (k < 0.7) {
-        const s = bm.size * (k < 0.12 ? Mathf.lerp(0.3, 1.25, k / 0.12) : Mathf.lerp(1.25, 1.1, (k - 0.12) / 0.58));
+      if (k < 1.0) {
+        const s = bm.size * (k < 0.12 ? Mathf.lerp(0.3, 1.25, k / 0.12) : Mathf.lerp(1.25, 1.1, (k - 0.12) / 0.88));
         bm.burst.transform.localScale = new V3(s, s, 1);
         bm.burst.transform.localEulerZ = k * 30;
-        bm.burst.color = Color.white.withAlpha(k > 0.5 ? (0.7 - k) / 0.2 : 1);
-        bm.text.characterSize = (bm.size * 0.32 * 10 / 64) * (k < 0.12 ? k / 0.12 : 1);
-        bm.text.color = Ink.withAlpha(k > 0.5 ? (0.7 - k) / 0.2 : 1);
+        bm.burst.color = Color.white.withAlpha(k > 0.75 ? (1 - k) / 0.25 : 1);
+        bm.text.characterSize = (bm.size * 0.4 * 10 / 64) * (k < 0.12 ? k / 0.12 : 1);
+        bm.text.color = Ink.withAlpha(k > 0.75 ? (1 - k) / 0.25 : 1);
       } else {
         bm.burst.gameObject.setActive(false);
         bm.text.text = "";
       }
       const sa = k < 0.15 ? k / 0.15 : k > 3.5 ? Math.max(0, 1 - (k - 3.5) / 1.5) : 1;
       bm.soot.color = new Color(0.06, 0.03, 0.06, 0.85 * sa);
-      const ss = bm.size * 0.95;
+      const ss = bm.size * 1.15;
       bm.soot.transform.localScale = new V3(ss, ss, 1);
       if (k > 5) { bm.on = false; bm.soot.gameObject.setActive(false); }
     }
   }
 
   private Name(i: number) { return this.mode === Mode.Vs ? (i === 0 ? "YOU" : "CPU") : this.Duel ? (i === 0 ? "BLUE" : "ORANGE") : "SCORE"; }
+
+  private Who(i: number) { const n = this.Name(i); return n === "YOU" ? "YOUR" : n; }
 
   private RefreshHud() {
     const duel = this.Duel;
@@ -680,7 +682,7 @@ export class WallBombsGame extends ArcadeGame {
       HeadlineColor: winner < 0 ? Color.white : Colors[winner],
       Stars: stars,
       BestLine: `DEFUSED ${a} – ${b}${rank > 0 ? `   ·   #${rank} TODAY` : ""}`,
-      Stats: [[`${this.Name(0)} DEFUSED`, String(a)], [`${this.Name(1)} DEFUSED`, String(b)], [`${this.Name(0)} SCORE`, Fmt.n(this.score[0])], [`${this.Name(1)} SCORE`, Fmt.n(this.score[1])]],
+      Stats: [[`${this.Who(0)} DEFUSED`, String(a)], [`${this.Name(1)} DEFUSED`, String(b)], [`${this.Who(0)} SCORE`, Fmt.n(this.score[0])], [`${this.Name(1)} SCORE`, Fmt.n(this.score[1])]],
       Primary: this.mode === Mode.Vs ? "REMATCH" : "PLAY AGAIN",
       Victory: winner >= 0,
     }));
