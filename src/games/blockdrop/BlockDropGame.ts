@@ -303,7 +303,7 @@ export class BlockDropGame extends ArcadeGame {
     if (!this.modeButton) return;
     CasualUI.setText(this.modeButton.label!, ModeNames[this.mode]);
     this.modeButton.setAccent(KindColors[[1, 2, 5, 7][this.mode]]);
-    CasualUI.setText(this.diffButton.label!, this.mode === Mode.Vs ? "CPU: " + DiffNames[this.diff] : "LEVEL 1");
+    CasualUI.setText(this.diffButton.label!, this.mode === Mode.Vs ? "CPU: " + DiffNames[this.diff] : "CPU: —");
     this.diffButton.setAccent(this.mode === Mode.Vs ? DiffColors[this.diff] : Pal.TextDim);
     this.diffButton.interactable = this.mode === Mode.Vs;
     CasualUI.setText(this.ctrlButton.label!, this.buttonsMode ? "TOUCH: BUTTONS" : "TOUCH: SWIPE");
@@ -528,7 +528,7 @@ export class BlockDropGame extends ArcadeGame {
     this.Layout();
     this.UpdateHud();
     this.UI.Announce("READY", Gold, 0.9);
-    if (this.Data.get("games") <= 2) this.UI.Toast(this.TouchUI ? (this.mode === Mode.Duo ? "Each player uses one half of the screen: tap rotates, drag moves, flick down drops." : "Tap to rotate · drag to move · flick down to drop · flick up to hold") : this.mode === Mode.Duo ? "P1: WASD + SPACE (Q / E)   ·   P2: ARROWS + ENTER (. / RIGHT SHIFT)" : "← → move · ↑ rotate · ↓ soft drop · SPACE drop · C hold", 4);
+    if (this.Data.get("games") <= 2) this.UI.Toast(this.TouchUI ? (this.buttonsMode && this.mode !== Mode.Duo ? "Buttons: ◀ ▶ move · ▼ soft drop · DROP · rotate both ways · HOLD. Swipes work too!" : this.mode === Mode.Duo ? "Each player uses one half of the screen: tap rotates, drag moves, flick down drops." : "Tap to rotate · drag to move · flick down to drop · flick up to hold") : this.mode === Mode.Duo ? "P1: WASD + SPACE (Q / E)   ·   P2: ARROWS + ENTER (. / RIGHT SHIFT)" : "← → move · ↑ rotate · ↓ soft drop · SPACE drop · C hold", 4);
     Sfx.setIntensity(0.3);
   }
 
