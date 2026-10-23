@@ -1,7 +1,7 @@
 import {
   AdService, ArcadeButton, ArcadeGame, Art, AudioClip, CasualArt, CasualFx, CasualLook, Color, Fmt, Fx, GameInfo, GameObject,
-  howTo, Image, Keyboard, LineRenderer, Mathf, Pal, Phase, Result, Screen, Sfx, Snd, SpriteRenderer, TapPointer, Text,
-  TextAnchor, Time, TouchScheme, UIKit, UINode, V2, V3,
+  howTo, Image, Keyboard, LineRenderer, Mathf, OnlineLink, OnlineRoom, Pal, Phase, Result, Screen, Sfx, Snd, SpriteRenderer,
+  tableCodeFromUrl, TableLobby, TableOverlay, TapPointer, Text, TextAnchor, Time, TouchScheme, UIKit, UINode, V2, V3,
 } from "../../kit";
 import {
   AimIcon, BoardHalf, BoardShadow, BoardSprite, CoinIcon, CoinSprite, EmptySlot, GlowRing, GoldSprite, RailSprite, RingSprite,
@@ -24,7 +24,22 @@ import { AiLevels, Board, CarromAI, Classic, Freestyle, Outcome, Points, ShotPla
 const Gold = Pal.hex(0xffc93c), Cream = Pal.hex(0xfff3d6), Ink = Pal.hex(0x140c08), Red = Pal.hex(0xff5a4e);
 const Teal = Pal.hex(0x2ee6b8), Blue = Pal.hex(0x4fa3ff), Orange = Pal.hex(0xff9d3c);
 const PlayerColors = [Orange, Blue];
-const ModeNames = ["SOLO", "VS CPU", "2 PLAYERS"];
+const ModeNames = ["SOLO", "VS CPU", "2 PLAYERS", "ONLINE"];
+const Online = 3;
+const OnlinePrize = 80;
+/** Online (private table) payloads. Host = player 0 (white, bottom), guest = player 1 (black; sees its own side at the bottom). */
+interface OStart { rules: number; seed: number; first: number }
+/** A shot: striker x on the shooter's baseline, direction and speed (rounded so both devices simulate the same input). */
+interface OMove { x: number; dx: number; dy: number; sp: number }
+interface OOut { foul: boolean; reason: string; qc: boolean; qr: boolean; q: boolean; text: string; potted: number; cont: boolean; ret: number[] }
+/** The settled board after each shot (host → guest). */
+interface OSnap {
+  rules: number; seed: number; first: number; n: number;
+  d: number[]; // per disc: on, x, y, ang (x/y/ang rounded)
+  b: { turn: number; qs: number; qb: number; due: number[]; score: number[]; pots: number[]; fouls: number[]; strikes: number; over: boolean; winner: number; reason: string; brk: boolean };
+  clock: number; timeUp: boolean; lastX: number[]; out: OOut | null; rolling: boolean;
+}
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
 const RuleNames = ["CLASSIC", "FREESTYLE"];
 const DiffNames = ["EASY", "MEDIUM", "HARD"];
 const CpuNames = ["RAVI", "MEERA", "ARJUN"];
@@ -37,7 +52,7 @@ const BaseGuide = 3.2, ProGuide = 14;
 const RailY = BoardHalf + 1.15, RailLen = 2 * BaseHalf + 2 * RS + 0.8;
 const ContentHalfH = RailY + 0.9, ContentHalfW = BoardHalf + 0.2;
 
-enum Step { Aim, Rolling, Settle, CpuThink, CpuPlace, CpuAim, Wait }
+enum Step { Aim, Rolling, Settle, CpuThink, CpuPlace, CpuAim, Wait, Remote }
 enum Drag { None, Slide, Pull, Key }
 
 class DiscView {
@@ -98,6 +113,14 @@ export class CarromGame extends ArcadeGame {
   private aimButton!: ArcadeButton;
   private coinWallet!: Text;
   private modeButton: ArcadeButton | null = null; private rulesButton!: ArcadeButton; private diffButton!: ArcadeButton; private modeLabel!: Text;
+
+  // online
+  private lobby!: TableLobby; private overlay!: TableOverlay;
+  private link: OnlineLink<OStart, OMove, OSnap> | null = null;
+  private me = 0; private onlineStart: OStart = { rules: 0, seed: 1, first: 0 }; private onlineGo = false; private autoJoined = false;
+  private forfeit = false; private shotN = 0; private pendingSnap: OSnap | null = null; private waitT = 0; private ended = false;
+  private ease: { x: number; y: number }[] = [];
+  private lastPrize = 0;
 
   private clack: AudioClip[] = []; private thud!: AudioClip; private dropClip!: AudioClip; private strikeClip!: AudioClip; private rackClip!: AudioClip;
 
@@ -186,6 +209,7 @@ export class CarromGame extends ArcadeGame {
     this.sim.rack(7);
     this.ResetViews();
     this.Layout();
+    this.BuildOnline();
     // dev only: lets the scripted tests plan shots with the CPU's brain
     if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__carromAI = { CarromAI, Rng };
   }
@@ -266,7 +290,7 @@ export class CarromGame extends ArcadeGame {
   private BuildTitleExtras() {
     const ex = this.UI.TitleExtra;
     if (!ex) return;
-    this.modeButton = UIKit.buttonAt(ex, "VS CPU", UIKit.Center, new V2(-330, 10), new V2(310, 104), false, () => this.CycleSetting("mode", 3), 30);
+    this.modeButton = UIKit.buttonAt(ex, "VS CPU", UIKit.Center, new V2(-330, 10), new V2(310, 104), false, () => this.CycleSetting("mode", 4), 30);
     this.rulesButton = UIKit.buttonAt(ex, "CLASSIC", UIKit.Center, new V2(0, 10), new V2(310, 104), false, () => this.CycleSetting("rules", 2), 30);
     this.diffButton = UIKit.buttonAt(ex, "MEDIUM", UIKit.Center, new V2(330, 10), new V2(310, 104), false, () => this.CycleSetting("diff", 3), 30);
     this.modeButton.setAccent(Orange);
@@ -277,6 +301,8 @@ export class CarromGame extends ArcadeGame {
     CasualLook.titleCard(this.UI, new Color(0.06, 0.03, 0.02, 0.62), new V2(1060, 1060), -10);
   }
 
+  private get SelMode() { return Mathf.clamp(this.Data.get("mode", 1), 0, 3); }
+
   private CycleSetting(key: string, n: number) {
     this.Data.set(key, (this.Data.get(key) + 1) % n);
     Sfx.play(Snd.Click, 0.6);
@@ -285,7 +311,7 @@ export class CarromGame extends ArcadeGame {
 
   private RefreshTitle() {
     if (!this.modeButton) return;
-    const m = Mathf.clamp(this.Data.get("mode", 1), 0, 2), r = Mathf.clamp(this.Data.get("rules"), 0, 1), d = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
+    const m = this.SelMode, r = Mathf.clamp(this.Data.get("rules"), 0, 1), d = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
     if (this.modeButton.label) this.modeButton.label.text = ModeNames[m];
     if (this.rulesButton.label) this.rulesButton.label.text = RuleNames[r];
     if (this.diffButton.label) this.diffButton.label.text = m === 1 ? DiffNames[d] : "—";
@@ -293,7 +319,8 @@ export class CarromGame extends ArcadeGame {
     this.modeLabel.text = m === 0
       ? (r === Classic ? `CLEAR ALL 19 COINS IN ${SoloStrikes} STRIKES OR LESS` : "2 MINUTES: WHITE 20 · BLACK 10 · QUEEN 50")
       : m === 1 ? `BEAT ${CpuNames[d]} (${DiffNames[d]}) AND WIN ${Prizes[d]} COINS`
-        : "TWO PLAYERS, OPPOSITE SIDES OF THE PHONE";
+        : m === Online ? `PLAY A FRIEND ON THEIR OWN PHONE · WIN ${OnlinePrize} COINS`
+          : "TWO PLAYERS, OPPOSITE SIDES OF THE PHONE";
     this.UI.ShowTitle(this.BestLine(), this.StatsLine());
   }
 
@@ -321,6 +348,9 @@ export class CarromGame extends ArcadeGame {
     }
     this.table.localPosition = new V3(cx, cy, 0);
     this.table.localScale = new V3(this.tableScale, this.tableScale, 1);
+    // online guest: the board turns so their own baseline is at the bottom
+    this.rot = this.mode === Online && this.me === 1;
+    this.table.localEulerZ = this.rot ? 180 : 0;
     // LineRenderer widths are world units even in local space: scale the guide lines with the board (kit gap)
     this.lineK = this.tableScale;
     this.aimLine.widthMultiplier = 0.09 * this.lineK; this.coinLine.widthMultiplier = 0.09 * this.lineK;
@@ -331,8 +361,8 @@ export class CarromGame extends ArcadeGame {
     const flip = this.portrait && this.mode === 2;
     if (this.portrait) {
       const cw = 440;
-      this.cards[0].root.place(new V2(0, 1), new V2(15 + cw / 2, -88), new V2(cw, 146));
-      this.cards[1].root.place(new V2(1, 1), new V2(-150 - cw / 2 + 20, -88), new V2(cw, 146));
+      this.cards[this.Seat(0)].root.place(new V2(0, 1), new V2(15 + cw / 2, -88), new V2(cw, 146));
+      this.cards[this.Seat(1)].root.place(new V2(1, 1), new V2(-150 - cw / 2 + 20, -88), new V2(cw, 146));
       this.infoText.rectTransform.place(new V2(0.5, 1), new V2(0, -190), new V2(700, 40));
       this.turnText.rectTransform.place(new V2(0.5, 1), new V2(0, -240), new V2(760, 56));
       const by = toHud(0, -ContentHalfH);
@@ -342,20 +372,28 @@ export class CarromGame extends ArcadeGame {
       const cw = 420;
       const left = toHud(-ContentHalfW, 0).x - 30 - cw / 2;
       const right = toHud(ContentHalfW, 0).x + 30 + cw / 2;
-      this.cards[1].root.place(UIKit.Center, new V2(left, toHud(0, BoardHalf).y - 75), new V2(cw, 146));
-      this.cards[0].root.place(UIKit.Center, new V2(left, toHud(0, -BoardHalf).y + 75), new V2(cw, 146));
+      this.cards[this.Seat(1)].root.place(UIKit.Center, new V2(left, toHud(0, BoardHalf).y - 75), new V2(cw, 146));
+      this.cards[this.Seat(0)].root.place(UIKit.Center, new V2(left, toHud(0, -BoardHalf).y + 75), new V2(cw, 146));
       this.infoText.rectTransform.place(UIKit.Center, new V2(right, 60), new V2(440, 40));
       this.turnText.rectTransform.place(UIKit.Center, new V2(right, 0), new V2(440, 56));
       this.aimButton.node.place(UIKit.Center, new V2(right, toHud(0, -BoardHalf).y + 60), new V2(300, 104));
       this.walletNode.place(UIKit.Center, new V2(right, toHud(0, -BoardHalf).y + 190), new V2(260, 76));
     }
     this.cards[1].root.localEulerAngles = new V3(0, 0, flip ? 180 : 0);
+    if (this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 70) }, { anchor: new V2(0.5, 1), pos: new V2(0, -330) });
+    else this.overlay.place({ anchor: new V2(1, 0), pos: new V2(-270, 300) }, { anchor: new V2(0, 0.5), pos: new V2(260, 0) });
     this.Present(0);
   }
+
+  /** HUD slot of player i's card: online, my card takes player 1's usual (bottom / left) slot. */
+  private Seat(i: number) { return this.mode === Online && this.me === 1 ? 1 - i : i; }
+  private rot = false;
 
   // ------------------------------------------------------------------ lifecycle
 
   protected OnEnterTitle() {
+    this.LeaveTable();
+    this.ended = false;
     this.ApplyTheme();
     this.sim.rack(Math.floor(Math.random() * 1e9));
     this.sim.events = null;
@@ -363,9 +401,18 @@ export class CarromGame extends ArcadeGame {
     this.attractT = 1.2;
     this.attractShots = 0;
     this.HideGuide();
-    this.mode = Mathf.clamp(this.Data.get("mode", 1), 0, 2);
+    this.mode = 1;
+    this.me = 0;
     this.Layout();
     this.RefreshTitle();
+    // an invite link (?table=12345) opens the join panel and joins straight away
+    const code = tableCodeFromUrl();
+    if (code && !this.autoJoined) {
+      this.autoJoined = true;
+      this.Data.set("mode", Online);
+      this.RefreshTitle();
+      this.lobby.open("join", code);
+    }
   }
 
   private ApplyTheme() {
@@ -375,14 +422,18 @@ export class CarromGame extends ArcadeGame {
   }
 
   protected BeginRun() {
-    this.mode = Mathf.clamp(this.Data.get("mode", 1), 0, 2);
+    this.mode = this.SelMode;
     this.rules = Mathf.clamp(this.Data.get("rules"), 0, 1);
     this.diff = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
     this.Data.add("games", 1);
+    this.ended = false; this.forfeit = false; this.pendingSnap = null; this.shotN = 0; this.waitT = 0;
+    if (this.mode === Online) { this.me = this.link ? this.link.me : 0; this.rules = this.onlineStart.rules; this.proMatch = false; }
+    else this.me = 0;
     this.board = new Board(this.rules, this.mode === 0 ? 1 : 2);
     this.ai = this.mode === 1 ? new CarromAI(AiLevels[this.diff], new Rng((Date.now() & 0xffffff) + this.diff * 7919)) : null;
     this.rng = new Rng(Date.now() & 0xfffffff);
-    this.sim.rack(this.rng.int(1e9));
+    this.sim.rack(this.mode === Online ? this.onlineStart.seed : this.rng.int(1e9));
+    if (this.mode === Online) this.board.turn = this.onlineStart.first;
     this.sim.events = [];
     this.ResetViews();
     this.clock = RoundTime;
@@ -398,6 +449,7 @@ export class CarromGame extends ArcadeGame {
       this.cards[i].name.text = names[i];
       this.cards[i].root.setActive(i === 0 || this.mode !== 0);
       this.cards[i].icon.sprite = this.board.colourOf(i) < 0 ? CoinIcon(i === 0 ? 2 : 1) : CoinIcon(i);
+      this.cards[i].root.localEulerAngles = V3.zero;
       this.views[Striker].glow!.color = PlayerColors[0].withAlpha(0.7);
     }
     Sfx.playClip(this.rackClip, 0.6);
@@ -405,18 +457,20 @@ export class CarromGame extends ArcadeGame {
     this.layoutFrames = 2;
     this.Layout();
     const title = this.mode === 0 ? (this.rules === Classic ? `CLEAR THE BOARD · ${SoloStrikes} STRIKES` : "2-MINUTE POINTS RUSH")
-      : this.mode === 1 ? `VS ${CpuNames[this.diff]} · ${RuleNames[this.rules]}` : `2 PLAYERS · ${RuleNames[this.rules]}`;
+      : this.mode === 1 ? `VS ${CpuNames[this.diff]} · ${RuleNames[this.rules]}`
+        : this.mode === Online ? `${this.board.turn === this.me ? "YOU BREAK" : "FRIEND BREAKS"} · ${RuleNames[this.rules]}` : `2 PLAYERS · ${RuleNames[this.rules]}`;
     this.UI.Announce(title, Gold, 1.6);
     this.BeginTurn(true);
   }
 
   private Names() {
+    if (this.mode === Online) return this.me === 0 ? ["YOU", "FRIEND"] : ["FRIEND", "YOU"];
     if (this.mode === 0) return ["YOU", ""];
     if (this.mode === 1) return ["YOU", CpuNames[this.diff]];
     return ["PLAYER 1", "PLAYER 2"];
   }
 
-  private IsHuman(p: number) { return this.mode !== 1 || p === 0; }
+  private IsHuman(p: number) { return this.mode === Online ? p === this.me : this.mode !== 1 || p === 0; }
 
   protected OnPauseChanged(paused: boolean) { if (paused) { this.drag = Drag.None; this.power = 0; } }
 
@@ -432,7 +486,8 @@ export class CarromGame extends ArcadeGame {
     this.views[Striker].pop = 1;
     this.views[Striker].glow!.color = PlayerColors[p].withAlpha(0.7);
     this.aim = new V2(0, p === 0 ? 1 : -1);
-    if (this.IsHuman(p)) {
+    if (this.mode === Online && p !== this.me) { this.UI.Hint(null); this.step = Step.Remote; this.timer = 0; }
+    else if (this.IsHuman(p)) {
       this.step = Step.Aim;
       if (first && this.Data.get("games") <= 2) this.UI.Hint("Drag the rail to slide the striker. Pull back anywhere and let go to flick!");
       else if (this.mode === 2) this.UI.Announce(`${this.Names()[p]}`, PlayerColors[p], 0.9);
@@ -448,6 +503,8 @@ export class CarromGame extends ArcadeGame {
 
   protected TickBackground(dt: number) {
     if (this.layoutFrames > 0) { this.layoutFrames--; this.Layout(); }
+    this.lobby.tick(Time.unscaledDeltaTime);
+    this.overlay.tick();
     if (this.State === Phase.Title) {
       if (this.sim.moving) this.Simulate(dt, true);
       else {
@@ -480,13 +537,17 @@ export class CarromGame extends ArcadeGame {
 
   protected TickRun(dt: number) {
     if (this.layoutFrames > 0) { this.layoutFrames--; this.Layout(); }
-    this.pointer.update(dt);
+    this.overlay.tick();
+    this.overlay.showBar(this.mode === Online && !this.ended);
+    if (this.State === Phase.Paused || this.overlay.busy) this.pointer.reset(); else this.pointer.update(dt);
     this.soundsThisFrame = 0;
     this.timer += dt;
     if (this.rules === Freestyle && !this.timeUp && this.step !== Step.Wait) {
       this.clock -= dt;
       if (this.clock <= 10 && Math.ceil(this.clock) !== Math.ceil(this.clock + dt) && this.clock > 0) Sfx.play(Snd.Tick, 0.6, 1.2);
-      if (this.clock <= 0) { this.clock = 0; this.timeUp = true; if (this.step === Step.Aim || this.step === Step.CpuThink || this.step === Step.CpuPlace || this.step === Step.CpuAim) this.EndMatch(); }
+      // online the host's clock is the reference: the guest waits for the host's final board
+      if (this.clock <= 0 && !(this.mode === Online && this.me === 1)) { this.clock = 0; this.timeUp = true; if (this.step === Step.Aim || this.step === Step.CpuThink || this.step === Step.CpuPlace || this.step === Step.CpuAim || this.step === Step.Remote) this.EndMatch(); }
+      if (this.clock < 0) this.clock = 0;
     }
     switch (this.step) {
       case Step.Aim: this.PlayerAim(dt); break;
@@ -500,7 +561,11 @@ export class CarromGame extends ArcadeGame {
       case Step.CpuThink: this.CpuThink(); break;
       case Step.CpuPlace: this.CpuPlaceTick(); break;
       case Step.CpuAim: this.CpuAimTick(); break;
-      case Step.Wait: break;
+      case Step.Wait:
+        // online guest waiting for the host's settled board: ask again if it doesn't come
+        if (this.mode === Online && this.me === 1 && !this.ended) { this.waitT += Time.unscaledDeltaTime; if (this.waitT > 5) { this.waitT = 0; this.link?.room.send({ t: "sync?" }); } }
+        break;
+      case Step.Remote: this.HideGuide(); break;
     }
     if (this.rules === Freestyle) this.UpdateClock();
     this.Present(dt);
@@ -511,12 +576,14 @@ export class CarromGame extends ArcadeGame {
   private ScreenToTable(screen: V2) {
     const w = this.ScreenToWorld(screen);
     const lp = this.table.localPosition;
-    return new V2((w.x - lp.x) / this.tableScale, (w.y - lp.y) / this.tableScale);
+    const k = this.rot ? -1 : 1;
+    return new V2(k * (w.x - lp.x) / this.tableScale, k * (w.y - lp.y) / this.tableScale);
   }
 
   private TableToWorld(p: V2) {
     const lp = this.table.localPosition;
-    return new V2(lp.x + p.x * this.tableScale, lp.y + p.y * this.tableScale);
+    const k = this.rot ? -1 : 1;
+    return new V2(lp.x + k * p.x * this.tableScale, lp.y + k * p.y * this.tableScale);
   }
 
   private PlayerAim(dt: number) {
@@ -524,7 +591,7 @@ export class CarromGame extends ArcadeGame {
     const by = me === 0 ? -BaseY : BaseY, railY = me === 0 ? -RailY : RailY;
     // keyboard: arrows slide, A/D turn, hold space for power
     const slide = (Keyboard.right.isPressed ? 1 : 0) - (Keyboard.left.isPressed ? 1 : 0);
-    if (slide !== 0 && this.drag !== Drag.Pull) this.MoveStriker(this.sim.x[Striker] + slide * dt * 5 * (me === 0 ? 1 : 1));
+    if (slide !== 0 && this.drag !== Drag.Pull) this.MoveStriker(this.sim.x[Striker] + slide * dt * 5 * (this.rot ? -1 : 1));
     const turn = (Keyboard.letter("a").isPressed ? 1 : 0) - (Keyboard.letter("d").isPressed ? 1 : 0);
     if (turn !== 0) this.RotateAim(turn * dt * (Keyboard.leftShift.isPressed ? 10 : 50));
     if (Keyboard.space.wasPressedThisFrame && this.drag === Drag.None) { this.drag = Drag.Key; this.power = 0; this.keyT = 0; }
@@ -575,9 +642,16 @@ export class CarromGame extends ArcadeGame {
     this.aim = new V2(Math.cos(a), Math.sin(a));
   }
 
-  private Strike(speed = -1) {
+  private Strike(speed = -1, remote = false) {
     this.UI.Hint(null);
-    const sp = speed >= 0 ? speed : MaxSpeed * (0.04 + 0.96 * Math.pow(this.power, 1.35));
+    let sp = speed >= 0 ? speed : MaxSpeed * (0.04 + 0.96 * Math.pow(this.power, 1.35));
+    if (this.mode === Online && !remote) {
+      // both devices simulate exactly this (rounded) input; the host's settled board is the reference
+      const mv: OMove = { x: r4(this.sim.x[Striker]), dx: r4(this.aim.x), dy: r4(this.aim.y), sp: r4(sp) };
+      this.sim.place(Striker, mv.x, this.sim.y[Striker]);
+      this.aim = new V2(mv.dx, mv.dy); sp = mv.sp;
+      this.link?.sendMove(mv);
+    }
     this.sim.events = [];
     this.sim.shoot(this.aim.x, this.aim.y, sp);
     Sfx.playClip(this.strikeClip, 0.35 + 0.65 * Mathf.clamp01(sp / MaxSpeed), 0.95 + Math.random() * 0.1);
@@ -642,28 +716,43 @@ export class CarromGame extends ArcadeGame {
 
   private Resolve() {
     const b = this.board, s = this.sim;
+    if (this.mode === Online && this.me === 1) {
+      // the guest never judges: it shows the host's settled board
+      const snap = this.pendingSnap;
+      this.pendingSnap = null;
+      if (snap && snap.n > this.shotN) this.ApplySnap(snap);
+      else { this.step = Step.Wait; this.waitT = 0; }
+      return;
+    }
     const me = b.turn;
     const rec = s.record;
     const o: Outcome = b.resolve(s, rec);
     for (const n of o.returned) { this.views[n].dropT = -1; this.views[n].pop = 1; this.fx.pop(new V2(s.x[n], s.y[n]), Gold, 10, 2, 0.18, 0.4); }
     if (this.mode === 0 && rec.strikerPotted && this.rules === Classic) this.penalties++;
-    if (o.foul) {
-      this.UI.Announce(this.mode === 0 && this.rules === Classic ? "STRIKER IN: +1 STRIKE" : `FOUL: ${o.foulReason}`, Red, 1.3);
-      Sfx.play(Snd.Deny, 0.6);
-      if (o.returned.length && this.mode !== 0) this.UI.Toast(o.returned.some((n) => n === Queen) ? "Queen and a penalty coin go back to the centre" : "A penalty coin goes back to the centre", 2.2);
-    } else if (o.queenCovered) { this.UI.Announce("QUEEN COVERED!", Pal.hex(0xff6a7a), 1.4); Sfx.play(Snd.PowerUp, 0.7); this.fxWorld.confetti(this.TableToWorld(V2.zero), 40, 6, [Red, Gold, Color.white]); }
-    else if (o.queenReturned) { this.UI.Announce("QUEEN NOT COVERED", Pal.hex(0xffa0a0), 1.3); }
-    else if (o.queen && this.mode !== 0 && this.rules === Classic) this.UI.Toast("Now COVER the queen: pocket one of your coins", 2.5);
-    else if (o.text === "COVER THE QUEEN FIRST") this.UI.Toast("Your last coin can't go before the queen is covered!", 2.5);
-    else if (rec.potted.length >= 2 && (o.continues || this.mode === 0)) this.UI.Announce(`${rec.potted.length} IN ONE!`, Gold, 1);
-    if (b.over || (this.rules === Freestyle && this.timeUp)) { if (this.rules === Freestyle && this.timeUp && !b.over) b.timeUp(); this.EndMatch(); return; }
-    if (this.mode === 0 && this.rules === Classic && b.strikes + this.penalties >= this.strikeLimit) { this.EndMatch(); return; }
-    if (this.mode !== 0 && b.turn !== me) {
-      const n = this.Names()[b.turn];
-      if (this.mode === 1 && b.turn === 0) this.UI.Toast("YOUR TURN", 1.2);
-      void n;
+    if (this.mode === Online) {
+      this.shotN++;
+      this.lastOut = { foul: o.foul, reason: o.foulReason, qc: o.queenCovered, qr: o.queenReturned, q: o.queen, text: o.text, potted: rec.potted.length, cont: o.continues, ret: o.returned };
+      if (this.rules === Freestyle && this.timeUp && !b.over) b.timeUp();
     }
+    this.AnnounceOutcome({ foul: o.foul, reason: o.foulReason, qc: o.queenCovered, qr: o.queenReturned, q: o.queen, text: o.text, potted: rec.potted.length, cont: o.continues, ret: o.returned });
+    if (b.over || (this.rules === Freestyle && this.timeUp)) { if (this.rules === Freestyle && this.timeUp && !b.over) b.timeUp(); this.EndMatch(); this.link?.pushState(); return; }
+    if (this.mode === 0 && this.rules === Classic && b.strikes + this.penalties >= this.strikeLimit) { this.EndMatch(); return; }
+    if (this.mode === 1 && b.turn !== me && b.turn === 0) this.UI.Toast("YOUR TURN", 1.2);
     this.BeginTurn();
+    if (this.mode === Online) this.link?.pushState();
+  }
+  private lastOut: OOut | null = null;
+
+  private AnnounceOutcome(o: OOut) {
+    if (o.foul) {
+      this.UI.Announce(this.mode === 0 && this.rules === Classic ? "STRIKER IN: +1 STRIKE" : `FOUL: ${o.reason}`, Red, 1.3);
+      Sfx.play(Snd.Deny, 0.6);
+      if (o.ret.length && this.mode !== 0) this.UI.Toast(o.ret.some((n) => n === Queen) ? "Queen and a penalty coin go back to the centre" : "A penalty coin goes back to the centre", 2.2);
+    } else if (o.qc) { this.UI.Announce("QUEEN COVERED!", Pal.hex(0xff6a7a), 1.4); Sfx.play(Snd.PowerUp, 0.7); this.fxWorld.confetti(this.TableToWorld(V2.zero), 40, 6, [Red, Gold, Color.white]); }
+    else if (o.qr) { this.UI.Announce("QUEEN NOT COVERED", Pal.hex(0xffa0a0), 1.3); }
+    else if (o.q && this.mode !== 0 && this.rules === Classic) this.UI.Toast("Now COVER the queen: pocket one of your coins", 2.5);
+    else if (o.text === "COVER THE QUEEN FIRST") this.UI.Toast("Your last coin can't go before the queen is covered!", 2.5);
+    else if (o.potted >= 2 && (o.cont || this.mode === 0)) this.UI.Announce(`${o.potted} IN ONE!`, Gold, 1);
   }
 
   // ------------------------------------------------------------------ CPU
@@ -835,14 +924,17 @@ export class CarromGame extends ArcadeGame {
       if (!on) continue;
       v.pop = Mathf.moveTowards(v.pop, 0, dt * 3);
       const ps = 1 + 0.3 * Math.sin(v.pop * Math.PI);
-      v.root.localPosition = new V3(s.x[n], s.y[n], 0);
+      // online: a small correction from the host's board slides into place instead of jumping
+      const e = this.ease[n];
+      if (e && (e.x !== 0 || e.y !== 0)) { const k = Math.exp(-dt * 12); e.x *= k; e.y *= k; if (Math.abs(e.x) + Math.abs(e.y) < 0.002) { e.x = 0; e.y = 0; } }
+      v.root.localPosition = new V3(s.x[n] + (e ? e.x : 0), s.y[n] + (e ? e.y : 0), 0);
       v.root.localScale = new V3(ps, ps, 1);
       v.body.color = Color.white;
       v.body.transform.localEulerZ = (s.ang[n] * 180) / Math.PI;
       v.shadow.color = new Color(0, 0, 0, 0.42);
-      v.shadow.transform.localPosition = new V3(0.07, -0.1, 0);
+      v.shadow.transform.localPosition = this.rot ? new V3(-0.07, 0.1, 0) : new V3(0.07, -0.1, 0);
       if (v.glow) {
-        const active = this.State === Phase.Playing && (this.step === Step.Aim || this.step === Step.CpuAim || this.step === Step.CpuPlace || this.step === Step.CpuThink);
+        const active = this.State === Phase.Playing && (this.step === Step.Aim || this.step === Step.CpuAim || this.step === Step.CpuPlace || this.step === Step.CpuThink || this.step === Step.Remote);
         const c = PlayerColors[this.board.turn];
         v.glow.color = c.withAlpha(active ? 0.45 + 0.25 * Math.sin(Time.time * 5) : 0);
       }
@@ -903,7 +995,7 @@ export class CarromGame extends ArcadeGame {
     if (this.rules === Freestyle) this.UpdateClock();
     else this.SetTurnText();
     this.coinWallet.text = Fmt.n(this.Coins);
-    const label = this.proMatch || this.proShot ? "AIM+ ON" : this.Aims > 0 ? `AIM+ ×${this.Aims}` : this.Coins >= AimCost ? `AIM+ ${AimCost}` : AdService.rewardedAvailable ? "AIM+ +AD" : "AIM+";
+    const label = this.proMatch || this.proShot ? "AIM+ ON" : this.Aims > 0 ? `AIM+ ×${this.Aims}` : this.Coins >= AimCost ? `AIM+ ${AimCost}` : AdService.rewardedAvailable && this.mode !== Online ? "AIM+ +AD" : "AIM+";
     if (this.aimButton.label) this.aimButton.label.text = label;
   }
 
@@ -912,8 +1004,9 @@ export class CarromGame extends ArcadeGame {
     let t: string;
     if (this.mode === 0) t = "YOUR STRIKE";
     else if (this.mode === 1) t = p === 0 ? "YOUR TURN" : `${CpuNames[this.diff]} IS AIMING…`;
+    else if (this.mode === Online) t = p === this.me ? "YOUR TURN" : "FRIEND'S TURN";
     else t = `${this.Names()[p]}'S TURN`;
-    if (this.mode !== 0 && this.rules === Classic) t += p === 0 || this.mode === 2 ? `  ·  ${b.colourOf(p) === 0 ? "WHITE" : "BLACK"}` : "";
+    if (this.mode !== 0 && this.rules === Classic) t += p === 0 || this.mode === 2 || (this.mode === Online && p === this.me) ? `  ·  ${b.colourOf(p) === 0 ? "WHITE" : "BLACK"}` : "";
     this.turnText.text = t + extra;
     this.turnText.color = Color.lerp(PlayerColors[p], Color.white, 0.25);
   }
@@ -929,6 +1022,8 @@ export class CarromGame extends ArcadeGame {
     if (this.Aims > 0) this.Aims = this.Aims - 1;
     else if (this.Coins >= AimCost) { this.Coins = this.Coins - AimCost; this.UI.Toast(`-${AimCost} COINS`, 1.2); }
     else {
+      // no ads during an online match
+      if (this.mode === Online) { this.UI.Toast(`AIM+ costs ${AimCost} coins`, 1.6); return; }
       if (!AdService.rewardedAvailable) return;
       AdService.showRewarded((ok) => { if (!ok) return; this.Aims = this.Aims + 1; this.UI.Toast("+1 AIM+", 1.6); Sfx.play(Snd.PowerUp, 0.7); this.UpdateHud(); });
       return;
@@ -939,30 +1034,235 @@ export class CarromGame extends ArcadeGame {
     this.UpdateHud();
   }
 
+  // ------------------------------------------------------------------ online (private tables)
+
+  private BuildOnline() {
+    const theme = { accent: Orange, accent2: Blue, ink: Ink };
+    this.lobby = new TableLobby("carrom", theme, {
+      onReady: (room) => this.OnTableReady(room),
+      toast: (t, sec) => this.UI.Toast(t, sec ?? 2),
+    }, "Carrom Flick");
+    this.overlay = new TableOverlay(theme, () => { this.overlay.hide(); this.EnterTitle(); }, (k) => this.link?.react(k));
+    this.overlay.onTimeout = () => { this.link?.leave(); this.FriendLeft(); };
+  }
+
+  /** Online the board keeps running while the pause menu is open (the friend may be shooting). */
+  update() {
+    super.update();
+    if (this.State === Phase.Paused && this.mode === Online && !this.ended) {
+      const dt = Time.unscaledDeltaTime;
+      if (this.step === Step.Rolling) { this.Simulate(dt, false); if (!this.sim.moving) { this.step = Step.Settle; this.timer = 0; } }
+      else if (this.step === Step.Settle) { this.timer += dt; if (this.timer > 0.3) this.Resolve(); }
+      this.overlay.tick();
+      this.Present(dt);
+    }
+  }
+
+  /** PLAY with ONLINE selected opens the lobby; REMATCH online asks the friend. */
+  protected StartRun() {
+    if (this.State === Phase.Paused && this.mode === Online) { this.UI.Toast("Restart isn't available online: use MENU to leave the table.", 2.5); return; }
+    if (this.SelMode === Online && !this.onlineGo) {
+      if (this.State === Phase.Over && this.link && this.link.connected) { this.AskRematch(); return; }
+      if (this.State === Phase.Over) this.EnterTitle();
+      if (!this.lobby.isOpen) {
+        this.lobby.createNote = `Your table plays ${RuleNames[Mathf.clamp(this.Data.get("rules"), 0, 1)]} rules (change them on the title screen).`;
+        this.lobby.open("menu");
+      }
+      return;
+    }
+    this.onlineGo = false;
+    super.StartRun();
+  }
+
+  private OnTableReady(room: OnlineRoom) {
+    this.LeaveTable();
+    const link = new OnlineLink<OStart, OMove, OSnap>(room);
+    this.link = link;
+    link.bind({
+      onStart: (st) => {
+        this.onlineStart = st;
+        this.overlay.hide();
+        this.Data.set("mode", Online);
+        this.onlineGo = true;
+        this.StartRun();
+      },
+      validMove: (mv, by) => (this.State === Phase.Playing || this.State === Phase.Paused) && this.mode === Online && !this.ended
+        && by === this.board.turn && this.step === Step.Remote && Number.isFinite(mv.x) && Number.isFinite(mv.sp) && Math.abs(mv.x) <= BaseHalf + 0.01,
+      onMove: (mv, by) => this.RemoteShot(mv, by),
+      snapshot: () => this.Snapshot(),
+      onSnapshot: (snap) => {
+        if ((this.State === Phase.Playing || this.State === Phase.Paused) && this.mode === Online) { this.OnSnap(snap); return; }
+        if (this.State === Phase.Over && this.mode === Online && snap.b.over) return;
+        // joined (again) in the middle of a match: start from the host's state
+        this.onlineStart = { rules: snap.rules, seed: snap.seed, first: snap.first };
+        this.overlay.hide();
+        this.Data.set("mode", Online);
+        this.onlineGo = true;
+        this.StartRun();
+        this.ApplySnap(snap);
+      },
+      onReaction: (k) => this.overlay.Pop(k, true),
+      onFriend: (st) => {
+        if (st === "connected") { if (this.overlay.state === "lost") { this.overlay.hide(); this.UI.Toast("Your friend is back!", 2); } }
+        else if (st === "lost") { if (this.State !== Phase.Title && !this.ended) this.overlay.lost(30); }
+        else this.FriendLeft();
+      },
+      onRematchReady: () => { if (link.isHost) link.start({ rules: this.rules, seed: Math.floor(Math.random() * 1e9), first: link.match % 2 }); },
+      onFriendRematch: () => { if (this.overlay.state !== "rematch") this.UI.Toast("Your friend wants a rematch! Tap REMATCH.", 3); },
+    });
+    if (link.isHost) link.start({ rules: Mathf.clamp(this.Data.get("rules"), 0, 1), seed: Math.floor(Math.random() * 1e9), first: 0 });
+    else this.UI.Toast("Joined! Waiting for the host to start…", 3);
+  }
+
+  /** The friend's shot: play it here too (the host's result is the reference). */
+  private RemoteShot(mv: OMove, by: number) {
+    this.sim.place(Striker, mv.x, by === 0 ? -BaseY : BaseY);
+    this.lastX[by] = mv.x;
+    this.aim = new V2(mv.dx, mv.dy);
+    this.Strike(mv.sp, true);
+  }
+
+  private Snapshot(): OSnap {
+    const s = this.sim, b = this.board, d: number[] = [];
+    for (let i = 0; i < N; i++) d.push(s.on[i], r4(s.x[i]), r4(s.y[i]), Math.round(s.ang[i] * 100) / 100);
+    return {
+      rules: this.rules, seed: this.onlineStart.seed, first: this.onlineStart.first, n: this.shotN, d,
+      b: { turn: b.turn, qs: b.queenState, qb: b.queenBy, due: [...b.due], score: [...b.score], pots: [...b.pots], fouls: [...b.fouls], strikes: b.strikes, over: b.over, winner: b.winner, reason: b.reason, brk: b.breakShot },
+      clock: Math.round(this.clock * 10) / 10, timeUp: this.timeUp, lastX: this.lastX.map(r4), out: this.lastOut, rolling: this.step === Step.Rolling || this.step === Step.Settle,
+    };
+  }
+
+  /** Guest: a board from the host. While my own animation of the same shot still runs, it waits for it to settle. */
+  private OnSnap(snap: OSnap) {
+    if (this.ended && !snap.b.over) return;
+    if (snap.rolling && snap.n <= this.shotN) return; // the host is mid-shot: its settled board follows
+    if ((this.step === Step.Rolling || this.step === Step.Settle) && snap.n > this.shotN) { this.pendingSnap = snap; return; }
+    if (this.step === Step.Rolling && snap.n === this.shotN) return;
+    this.ApplySnap(snap);
+  }
+
+  private ApplySnap(snap: OSnap) {
+    const s = this.sim, b = this.board;
+    if (snap.seed !== this.onlineStart.seed) { this.onlineStart = { rules: snap.rules, seed: snap.seed, first: snap.first }; }
+    s.stopAll();
+    for (let i = 0; i < N; i++) {
+      const on = snap.d[i * 4] === 1, x = snap.d[i * 4 + 1], y = snap.d[i * 4 + 2];
+      const v = this.views[i];
+      const wasOn = s.on[i] === 1;
+      if (on) {
+        // hide a small correction (the local replay of the shot ended a hair away)
+        const dx = s.x[i] - x, dy = s.y[i] - y;
+        this.ease[i] = wasOn && v.dropT < 0 && Math.hypot(dx, dy) < 1.2 ? { x: dx, y: dy } : { x: 0, y: 0 };
+        s.place(i, x, y);
+        s.ang[i] = snap.d[i * 4 + 3];
+        if (!wasOn) { v.dropT = -1; v.pop = 1; }
+      } else { s.on[i] = 0; }
+    }
+    const sb = snap.b;
+    b.turn = sb.turn; b.queenState = sb.qs; b.queenBy = sb.qb; b.due = [...sb.due]; b.score = [...sb.score]; b.pots = [...sb.pots]; b.fouls = [...sb.fouls];
+    b.strikes = sb.strikes; b.over = sb.over; b.winner = sb.winner; b.reason = sb.reason; b.breakShot = sb.brk;
+    this.clock = snap.clock; this.timeUp = snap.timeUp; this.lastX = [...snap.lastX];
+    this.pendingSnap = null;
+    // announce the shot we just watched (not old ones after a rejoin)
+    if (snap.n === this.shotN + 1 && snap.out) {
+      this.AnnounceOutcome(snap.out);
+      for (const n of snap.out.ret) { this.views[n].pop = 1; this.fx.pop(new V2(s.x[n], s.y[n]), Gold, 10, 2, 0.18, 0.4); }
+    }
+    this.shotN = snap.n;
+    this.UpdateHud();
+    if (b.over) { this.EndMatch(); return; }
+    this.BeginTurn();
+  }
+
+  private AskRematch() {
+    if (!this.link) return;
+    this.overlay.waitingRematch();
+    this.link.askRematch();
+  }
+
+  /** The friend left on purpose or never came back. */
+  private FriendLeft() {
+    const link = this.link;
+    this.link = null;
+    if (link && link.room.status !== "closed") link.room.close();
+    if ((this.State === Phase.Playing || this.State === Phase.Paused) && this.mode === Online && !this.ended) {
+      const b = this.board;
+      if (b.strikes >= 6 || b.pots[0] + b.pots[1] >= 3) {
+        // the match was well underway: the player who stayed takes the win
+        this.forfeit = true;
+        this.overlay.hide();
+        if (this.State === Phase.Paused) this.Resume();
+        this.EndMatch();
+        return;
+      }
+      this.ended = true;
+      this.step = Step.Wait;
+      this.HideGuide();
+      this.overlay.left("Your friend left", "Not enough of the board was played for a result.");
+      return;
+    }
+    if (this.State === Phase.Over || this.overlay.state === "rematch") this.overlay.left("Your friend left", "No rematch this time.");
+  }
+
+  /** Leaving (menu, title): the friend is told and the room closes. */
+  private LeaveTable() {
+    if (this.link) { this.link.leave(); this.link = null; }
+    this.overlay?.hide();
+    this.overlay?.showBar(false);
+  }
+
+  private OnlineResult() {
+    const b = this.board, me = this.me, fr = 1 - me;
+    const won = this.forfeit || b.winner === me, draw = !this.forfeit && b.winner < 0;
+    const prize = won ? OnlinePrize : draw ? 20 : 5;
+    this.lastPrize = prize;
+    this.Coins = this.Coins + prize;
+    if (won) this.Data.add("onlineWins", 1);
+    this.Data.add("onlineGames", 1);
+    this.overlay.showBar(false);
+    const classic = this.rules === Classic;
+    this.Finish(new Result({
+      Headline: this.forfeit ? "FRIEND LEFT · YOU WIN!" : won ? "YOU WIN!" : draw ? "IT'S A DRAW" : "FRIEND WINS",
+      HeadlineColor: won ? Gold : PlayerColors[fr], Victory: won,
+      Value: classic ? `${b.pots[me]} – ${b.pots[fr]}` : `${b.score[me]} – ${b.score[fr]}`,
+      BestLine: `${classic ? "YOUR COINS" : "YOUR POINTS"} ${classic ? b.pots[me] : b.score[me]} · FRIEND ${classic ? b.pots[fr] : b.score[fr]}   ·   +${prize} COINS`,
+      Stats: classic
+        ? [["YOUR COINS", `${b.pots[me]}/9`], ["FRIEND'S COINS", `${b.pots[fr]}/9`], ["MATCH", String(this.link?.match ?? 1)], ["ONLINE WINS", String(this.Data.get("onlineWins"))]]
+        : [["YOUR POINTS", String(b.score[me])], ["FRIEND'S POINTS", String(b.score[fr])], ["MATCH", String(this.link?.match ?? 1)], ["ONLINE WINS", String(this.Data.get("onlineWins"))]],
+      Primary: this.link ? "REMATCH" : "NEW TABLE",
+      Reward: won ? () => { this.Coins = this.Coins + this.lastPrize; this.UI.Toast(`+${this.lastPrize} COINS: DOUBLED!`, 2.5); Sfx.play(Snd.Coin, 0.8); } : null,
+      RewardLabel: `DOUBLE COINS: +${prize} (AD)`,
+    }));
+  }
+
   // ------------------------------------------------------------------ results
 
   private EndMatch() {
+    if (this.ended) return;
+    this.ended = true;
     this.step = Step.Wait;
     this.HideGuide();
     const b = this.board;
-    if (this.rules === Freestyle && !b.over) b.timeUp();
+    if (this.rules === Freestyle && !b.over && !(this.mode === Online && this.me === 1)) b.timeUp();
+    if (this.mode === Online && this.me === 0) this.link?.pushState();
     this.startCoroutine(this.ShowResultLater());
   }
 
   private *ShowResultLater(): Generator<{ seconds: number; realtime: boolean } | undefined, void, unknown> {
     const b = this.board;
-    const won = this.mode === 0 ? Board.coinsLeft(this.sim) === 0 || this.rules === Freestyle : b.winner === 0;
+    const won = this.mode === Online ? this.forfeit || b.winner === this.me : this.mode === 0 ? Board.coinsLeft(this.sim) === 0 || this.rules === Freestyle : b.winner === 0;
     if (this.mode === 2 || won) {
       Sfx.play(Snd.Win, 0.8);
       this.fxWorld.confetti(this.TableToWorld(V2.zero).add(V2.up.mul(2)), 90, 9, [Gold, Color.white, Orange, Red, Teal]);
     } else Sfx.play(Snd.Lose, 0.7);
-    const head = this.mode === 0 ? (this.rules === Classic ? (won ? "BOARD CLEARED!" : "OUT OF STRIKES") : "TIME UP!")
+    const head = this.mode === Online ? (this.forfeit ? "YOUR FRIEND LEFT" : won ? "YOU WIN!" : b.winner < 0 ? "DRAW!" : "FRIEND WINS") : this.mode === 0 ? (this.rules === Classic ? (won ? "BOARD CLEARED!" : "OUT OF STRIKES") : "TIME UP!")
       : this.mode === 1 ? (b.winner === 0 ? "YOU WIN!" : b.winner === 1 ? `${CpuNames[this.diff]} WINS` : "DRAW")
         : b.winner < 0 ? "DRAW!" : `${this.Names()[b.winner]} WINS!`;
     this.UI.Announce(head, won || this.mode === 2 ? Gold : Red, 1.6);
     yield { seconds: 1.7, realtime: false };
     if (this.State !== Phase.Playing) return;
-    if (this.mode === 0) this.SoloResult();
+    if (this.mode === Online) this.OnlineResult();
+    else if (this.mode === 0) this.SoloResult();
     else if (this.mode === 1) this.CpuResult();
     else this.TwoPlayerResult();
   }
