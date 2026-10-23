@@ -191,9 +191,6 @@ export class RockPaperGame extends ArcadeGame {
   private BuildTitle() {
     const ex = this.UI.TitleExtra;
     if (!ex) return;
-    // kit gap: the shell sizes its logo for titles up to ~12 letters; this one is longer
-    const logo = (this.UI as unknown as { logo?: Text }).logo;
-    if (logo) { logo.fontSize = 78; logo.rectTransform.sizeDelta = new V2(1060, 150); }
     CasualLook.titleCard(this.UI, new Color(0.05, 0.02, 0.12, 0.7), new V2(1060, 1100), -30);
     const accents = [Green, Cyan, Orange];
     for (let i = 0; i < 3; i++) {

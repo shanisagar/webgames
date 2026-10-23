@@ -22,6 +22,36 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "molesmash",
+    name: "Mole Smash",
+    tagline: "Bonk them before they duck!",
+    genre: "Arcade",
+    icon: "img/icons/molesmash.webp",
+    feature: "img/features/molesmash.webp",
+    description: "The fairground mallet game: bonk moles before they hide, chase golden moles, crack helmets and dodge bombs as the round speeds up. Solo combo runs, three CPU hammers, or a friend on the same board hunting your own colour.",
+    component: load(() => import("./games/molesmash")),
+  },
+  {
+    id: "rockpaper",
+    name: "Rock Paper Scissors",
+    tagline: "Pick in secret. Shake. Shoot!",
+    genre: "Board",
+    icon: "img/icons/rockpaper.webp",
+    feature: "img/features/rockpaper.webp",
+    description: "Best of three with hidden picks and a big reveal. Build a streak against a CPU that learns your habits, play power picks that double a win or shield a loss, or face a friend side by side or across a tabletop.",
+    component: load(() => import("./games/rockpaper")),
+  },
+  {
+    id: "dotsboxes",
+    name: "Dots & Boxes",
+    tagline: "Draw a line. Close a box. Go again.",
+    genre: "Board",
+    icon: "img/icons/dotsboxes.webp",
+    feature: "img/features/dotsboxes.webp",
+    description: "The notebook classic in ink and doodles: close a box to claim it and move again. Solve ink-limited puzzle stages, outplay CPUs up to a chain-strategy master, or face a friend across the table on three board sizes.",
+    component: load(() => import("./games/dotsboxes")),
+  },
+  {
     id: "paddleduel",
     name: "Paddle Duel",
     tagline: "The original duel, turned up to neon.",
