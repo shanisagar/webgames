@@ -329,6 +329,7 @@ export const GAMES: GameEntry[] = [
     name: "Hole Hungry",
     tagline: "Swallow the city. Be the biggest hole.",
     genre: "Arcade",
+    online: true,
     icon: "img/icons/holehungry.webp",
     feature: "img/features/holehungry.webp",
     description: "Steer a hungry hole through a busy city and swallow people, cars, trees and towers to grow. Outgrow six rival holes in 2-minute rounds, or clear the whole city solo. Unlock new rims.",
