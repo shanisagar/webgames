@@ -241,6 +241,9 @@ export class KeeperGame extends WallGame {
     }
     const tp = at(0, top);
     this.timerPanel.place(UIKit.Center, tp, new V2(300, 140));
+    // narrow screens (portrait phones): the wall picture is scaled down, so is its HUD
+    const k = Math.min(1, (at(16, 0).x - at(-16, 0).x) / 1920);
+    for (const n of [this.timerPanel, this.lanes[0].panel, this.lanes[1].panel, this.streakPanel]) n.localScale = new V3(k, k, 1);
   }
 
   // ------------------------------------------------------------------ rounds

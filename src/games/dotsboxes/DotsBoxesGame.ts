@@ -360,7 +360,12 @@ export class DotsBoxesGame extends ArcadeGame {
     const r = this.PlayRect(top, bottom, 0.25);
     const need = this.n + 1.3;
     let w = r.width, cx = r.center.x;
-    if (!this.portrait && this.Playing && !solo) { w = r.width - 2 * (560 / this.UiPerWorld); }
+    if (!this.portrait && this.Playing && !solo) {
+      // wide screens: player panels in the left column (TABLE: turned panels at both ends)
+      const left = (this.Table ? 330 : 560) / this.UiPerWorld, right = (this.Table ? 330 : 300) / this.UiPerWorld;
+      w = r.width - left - right;
+      cx = r.xMin + left + w / 2;
+    }
     this.scale = Math.min(w / need, r.height / need);
     if (!this.Playing) this.scale = Math.min(this.ViewSize.x, this.ViewSize.y) / need * 0.95;
     this.board.localPosition = this.Playing ? new V3(cx, r.center.y, 0) : V3.zero;
@@ -380,11 +385,8 @@ export class DotsBoxesGame extends ArcadeGame {
       let anchor: V2, pos: V2, rot = 0;
       let size = new V2(500, 150);
       if (!this.portrait) {
-        // wide screens: panels to the left and right of the board
-        anchor = new V2(i === 0 ? 0 : 1, 0.5);
-        pos = new V2(i === 0 ? 290 : -290, 0);
-        rot = this.Table ? (i === 0 ? -90 : 90) : 0;
-        if (this.Table) pos = new V2(i === 0 ? 150 : -150, 0);
+        if (this.Table) { anchor = new V2(i === 0 ? 0 : 1, 0.5); pos = new V2(i === 0 ? 150 : -150, 0); rot = i === 0 ? -90 : 90; }
+        else { anchor = new V2(0, i === 0 ? 0 : 1); pos = new V2(290, i === 0 ? 110 : -110); }
       } else if (this.mode === Mode.Duo && !this.table) {
         anchor = new V2(0.5, 0); pos = new V2((i === 0 ? -1 : 1) * 265, 110); size = new V2(500, 150);
       } else if (i === 0) { anchor = new V2(0.5, 0); pos = new V2(0, 110); }

@@ -247,6 +247,9 @@ export class DodgeGame extends WallGame {
       this.bestPanel.anchoredPosition = at(10.6, top);
     }
     this.timerPanel.place(UIKit.Center, at(0, top), new V2(300, 150));
+    // narrow screens (portrait phones): the wall picture is scaled down, so is its HUD
+    const k = Math.min(1, (at(16, 0).x - at(-16, 0).x) / 1920);
+    for (const n of [this.timerPanel, this.lanes[0].panel, this.lanes[1].panel, this.bestPanel]) n.localScale = new V3(k, k, 1);
   }
 
   // ------------------------------------------------------------------ rounds
@@ -651,7 +654,7 @@ export class DodgeGame extends WallGame {
         result: new Result({
           Headline: head, HeadlineColor: Gold, Value: sa.toFixed(1), Stars: st, NewBest: best, Victory: st > 0,
           BestLine: `SCORE ${sa.toFixed(1)}   ·   BEST ${this.FormatScore(this.Data.get("best0"))}`,
-          Stats: [["TIME SURVIVED", Fmt.clock(Math.floor(a.time))], ["BONUS", `+${a.bonus} SEC`], ["THINGS DODGED", String(a.dodged)], ["POWER-UPS", String(a.powers)]],
+          Stats: [["SCORE", sa.toFixed(1)], ["TIME SURVIVED", Fmt.clock(Math.floor(a.time))], ["THINGS DODGED", String(a.dodged)], ["POWER-UPS (BONUS)", `${a.powers} (+${a.bonus}s)`]],
           Primary: "PLAY AGAIN",
         }),
         score: tenths(sa), label: "SOLO",

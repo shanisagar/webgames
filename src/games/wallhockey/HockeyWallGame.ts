@@ -164,7 +164,12 @@ export class HockeyWallGame extends WallGame {
     // the scoreboard sits just above the rink
     const rinkTop = this.UI.WorldToHud(new V2(0, RinkY + (HH + 0.75) * RinkScale)).y;
     this.board.place(UIKit.Center, new V2(0, rinkTop + 78), new V2(1000, 150));
-    for (let i = 0; i < 2; i++) this.zoneT[i].rectTransform.anchoredPosition = this.UI.WorldToHud(this.RinkToWorld(new V2((i === 0 ? -1 : 1) * HW * 0.55, -3.2)));
+    const k = Math.min(1, (this.UI.WorldToHud(new V2(16, 0)).x - this.UI.WorldToHud(new V2(-16, 0)).x) / 1920);
+    this.board.localScale = new V3(k, k, 1);
+    for (let i = 0; i < 2; i++) {
+      this.zoneT[i].rectTransform.anchoredPosition = this.UI.WorldToHud(this.RinkToWorld(new V2((i === 0 ? -1 : 1) * HW * 0.55, -3.2)));
+      this.zoneT[i].rectTransform.localScale = new V3(k, k, 1);
+    }
   }
 
   private RinkToWorld(p: V2) { return new V2(p.x * RinkScale, RinkY + p.y * RinkScale); }

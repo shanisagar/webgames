@@ -382,7 +382,6 @@ export class RockPaperGame extends ArcadeGame {
     for (let k = 0; k < 3; k++) { s.btns[k].local = new V2((k - 1) * btnX * (s.mirror ? -1 : 1), btnY); s.btns[k].size = btnS; }
     for (let k = 0; k < 2; k++) {
       s.cards[k].local = face ? new V2((k === 0 ? -1 : 1) * 4.0, -5.7) : new V2(-3.2 + k * 1.45, 3.7);
-      if (!face && s.mirror) s.cards[k].local = new V2(-s.cards[k].local.x, s.cards[k].local.y);
       s.cards[k].size = face ? 1.45 : 1.15;
     }
     for (let k = 0; k < 2; k++) {

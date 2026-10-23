@@ -1,6 +1,6 @@
 import {
   AdService, ArcadeButton, ArcadeGame, Art, AudioClip, CasualArt, CasualFx, CasualLook, Color, Ease, Fmt, Fx, GameInfo, GameObject, howTo,
-  Image, Mathf, Mouse, overUI, Pal, Phase, Random, Result, Screen, Sfx, Snd, SpriteRenderer, Text, TextAnchor, Time, Touchscreen,
+  Image, Mathf, Mouse, overUI, Pal, Phase, Random, Rect, Result, Screen, Sfx, Snd, SpriteRenderer, Text, TextAnchor, Time, Touchscreen,
   TouchScheme, UIKit, UINode, V2, V3,
 } from "../../kit";
 import { ClipSprite } from "./ClipSprite";
@@ -424,8 +424,14 @@ export class MoleSmashGame extends ArcadeGame {
     this.Fx.CameraTarget = V2.zero;
     CasualLook.fitCover(this.cover, this.ViewSize);
     const solo = !this.Duel;
-    const top = solo ? (this.portrait ? 300 : 210) : 240, bottom = solo ? (this.portrait ? 120 : 40) : 240;
-    const r = this.PlayRect(top, bottom, 0.15);
+    const wideDuel = !solo && !this.portrait;
+    const top = solo ? (this.portrait ? 300 : 210) : wideDuel ? 30 : 240, bottom = solo ? (this.portrait ? 120 : 40) : wideDuel ? 30 : 240;
+    let r = this.PlayRect(top, bottom, 0.15);
+    if (wideDuel) {
+      // wide screens: the player panels sit at the left and right ends
+      const k = 1080 / Math.min(this.ViewSize.x, this.ViewSize.y);
+      r = this.Table ? Rect.minMaxRect(r.xMin + 330 / k, r.yMin, r.xMax - 330 / k, r.yMax) : Rect.minMaxRect(r.xMin + 620 / k, r.yMin, r.xMax - 140 / k, r.yMax);
+    }
     const bw = this.cols * SpacingX + 1.0;
     const fitY = ((r.height / r.width) * bw - 1.0) / this.rows;
     this.PlaceHoles(Mathf.clamp(fitY, SpacingY, 3.3));
@@ -449,7 +455,10 @@ export class MoleSmashGame extends ArcadeGame {
       p.node.setActive(duel);
       if (!duel) continue;
       let anchor: V2, pos: V2, rot = 0;
-      if (this.mode === Mode.Duo && !this.table) { anchor = new V2(0.5, 0); pos = new V2((i === 0 ? -1 : 1) * (this.portrait ? 270 : 330), 105); }
+      if (!this.portrait) {
+        if (this.Table) { anchor = new V2(i === 0 ? 0 : 1, 0.5); pos = new V2(i === 0 ? 160 : -160, 0); rot = i === 0 ? -90 : 90; }
+        else { anchor = new V2(0, i === 0 ? 0 : 1); pos = new V2(310, i === 0 ? 130 : -130); }
+      } else if (this.mode === Mode.Duo && !this.table) { anchor = new V2(0.5, 0); pos = new V2((i === 0 ? -1 : 1) * 270, 105); }
       else if (i === 0) { anchor = new V2(0.5, 0); pos = new V2(0, 105); }
       else { anchor = new V2(0.5, 1); pos = new V2(this.portrait ? -60 : 0, -105); rot = this.Table ? 180 : 0; }
       const narrow = this.mode === Mode.Duo && !this.table && this.portrait;
@@ -510,7 +519,7 @@ export class MoleSmashGame extends ArcadeGame {
     this.relayout = 3;
     this.Layout();
     Sfx.setIntensity(0.3);
-    if (this.mode === Mode.Duo) this.UI.Toast(this.table ? "Cyan scores for the bottom player, orange for the top!" : "Player 1 hunts CYAN, player 2 hunts ORANGE!", 3);
+    if (this.mode === Mode.Duo) this.UI.Toast(this.table ? (this.portrait ? "Cyan scores for the bottom player, orange for the top!" : "Cyan scores for the left player, orange for the right!") : "Player 1 hunts CYAN, player 2 hunts ORANGE!", 3);
     else if (this.mode === Mode.Cpu) this.UI.Toast("You hunt the CYAN moles. The CPU hunts ORANGE!", 3);
     else if (this.Data.get("games") <= 1) this.UI.Toast("Tap the moles before they duck!", 3);
     this.UpdateHud(0);
@@ -610,7 +619,7 @@ export class MoleSmashGame extends ArcadeGame {
   private Spawn(h: Hole, kind: Kind, team: number, upTime: number) {
     h.kind = kind; h.team = team; h.up = upTime; h.t = 0; h.st = St.Rising; h.rise = 0; h.hp = kind === Kind.Helmet ? 2 : 1;
     h.targeted = false; h.squash = 0; h.hitBy = -1;
-    h.flipped = this.Table && team === 1;
+    h.flipped = this.Table && this.portrait && team === 1;
     h.holder.localEulerZ = h.flipped ? 180 : 0;
     h.front.transform.localEulerZ = h.flipped ? 180 : 0;
     h.front.transform.localPosition = new V3(0, h.flipped ? 0 : 0, 0);
@@ -686,7 +695,7 @@ export class MoleSmashGame extends ArcadeGame {
 
   /** Which player a tap belongs to (only matters for mallet art): the half of the screen it came from. */
   private SideOf(screen: V2) {
-    if (this.mode === Mode.Duo && this.table) return screen.y > Screen.height * 0.5 ? 1 : 0;
+    if (this.mode === Mode.Duo && this.table && this.portrait) return screen.y > Screen.height * 0.5 ? 1 : 0;
     if (this.mode === Mode.Duo) return screen.x > Screen.width * 0.5 ? 1 : 0;
     return 0;
   }
@@ -801,7 +810,7 @@ export class MoleSmashGame extends ArcadeGame {
     return Math.min(3, 1 + Math.floor(combo / 6));
   }
 
-  private FloatRot(team: number) { return this.Table && team === 1 ? 180 : 0; }
+  private FloatRot(team: number) { return !this.Table ? 0 : this.portrait ? (team === 1 ? 180 : 0) : team === 1 ? 90 : -90; }
 
   private FlyHelmet(h: Hole) {
     h.extra.gameObject.setActive(false);
@@ -906,8 +915,8 @@ export class MoleSmashGame extends ArcadeGame {
       f.age += dt;
       if (f.age >= f.life) { f.t.gameObject.setActive(false); continue; }
       const k = f.age / f.life;
-      const dir = f.rot === 180 ? -1 : 1;
-      f.t.rectTransform.anchoredPosition = f.start.add(new V2(0, dir * 110 * Ease.outCubic(k)));
+      const up = V2.fromAngle((f.rot + 90) * Mathf.Deg2Rad, 110 * Ease.outCubic(k));
+      f.t.rectTransform.anchoredPosition = f.start.add(up);
       const pop = k < 0.15 ? Mathf.lerp(0.4, 1.25, k / 0.15) : Mathf.lerp(1.25, 1, Mathf.clamp01((k - 0.15) / 0.2));
       f.t.rectTransform.localScale = new V3(pop, pop, 1);
       f.t.color = f.t.color.withAlpha(k < 0.65 ? 1 : 1 - (k - 0.65) / 0.35);

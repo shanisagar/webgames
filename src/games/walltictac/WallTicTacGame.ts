@@ -184,7 +184,7 @@ export class WallTicTacGame extends ArcadeGame {
       }
       const status = UIKit.at(UIKit.label(node, "", 78, Color.white), new V2(0.5, 1), new V2(0, -560), new V2(420, 100));
       UIKit.glow(status, Color.black.withAlpha(0.6), 5);
-      const info = UIKit.at(UIKit.label(node, "", 38, new Color(1, 1, 1, 0.85)), new V2(0.5, 1), new V2(0, -650), new V2(420, 60));
+      const info = UIKit.at(UIKit.wrap(UIKit.label(node, "", 36, new Color(1, 1, 1, 0.85))), new V2(0.5, 1), new V2(0, -655), new V2(420, 100));
       this.panels.push({ node, plate, sym, ring, ringBg, name, pips, status, info });
     }
     this.clockText = UIKit.at(UIKit.label(hud, "", 84, Color.white), new V2(0.5, 0.5), V2.zero, new V2(400, 100));
@@ -259,7 +259,8 @@ export class WallTicTacGame extends ArcadeGame {
       this.panels[i].node.localScale = new V3(k, k, 1);
     }
     const top = this.UI.WorldToHud(new V2(0, c.y + size / 2));
-    this.clockText.rectTransform.anchoredPosition = this.UI.WorldToHud(new V2(-(size / 2 + (W / 2 - size / 2) / 2), c.y - 6.2));
+    const lp = this.UI.WorldToHud(new V2(-side, c.y));
+    this.clockText.rectTransform.anchoredPosition = new V2(lp.x, lp.y + 445 * Math.min(1, (((W / 2 - size / 2) - 0.8) * Math.abs(this.UI.WorldToHud(new V2(1, 0)).x - this.UI.WorldToHud(V2.zero).x)) / 440));
     this.roundText.rectTransform.anchoredPosition = new V2(top.x, top.y + 6);
   }
 
@@ -652,7 +653,7 @@ export class WallTicTacGame extends ArcadeGame {
       const s = mine ? 1 + 0.05 * pulse : 0.92;
       p.sym.rectTransform.localScale = new V3(s, s, 1);
       p.plate.color = mine ? Color.lerp(Slate, Colors[i], 0.25) : Slate;
-      setText(p.info, solo && i === 0 ? `THROWS ${this.throwsN[0]}  ·  WASTED ${this.wasted[0]}` : `THROWS ${this.throwsN[i]}`);
+      setText(p.info, solo && i === 0 ? `THROWS ${this.throwsN[0]}\nWASTED ${this.wasted[0]}` : `THROWS ${this.throwsN[i]}`);
     }
     setText(this.clockText, solo ? Fmt.clock(Math.ceil(this.clock)) : "");
     this.clockText.color = solo && this.clock <= 10 ? Color.lerp(Pal.Danger, Color.white, 0.5 + 0.5 * Math.sin(Time.time * 12)) : Color.white;
