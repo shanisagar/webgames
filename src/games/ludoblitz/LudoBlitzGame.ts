@@ -1,7 +1,7 @@
 import {
   AdService, ArcadeButton, ArcadeGame, Art, AudioClip, Camera, CasualLook, Color, Ease, Fmt, Fx, GameInfo, GameObject, howTo, Image,
-  Mathf, Pal, Phase, Quaternion, Random, Result, Sfx, Snd, SpriteRenderer, SysRandom, Text, TextAnchor, TextMesh, Time, TouchScheme,
-  UIKit, UINode, V2, V3, WrapMode,
+  Mathf, OnlineLink, OnlineRoom, Pal, Phase, Quaternion, Random, Renderer, Result, Screen, Sfx, Snd, SpriteRenderer, SysRandom, tableCodeFromUrl,
+  TableLobby, TableOverlay, Text, TextAnchor, TextMesh, Time, TouchScheme, UIKit, UINode, V2, V3, WrapMode,
 } from "../../kit";
 import { LudoArt } from "./LudoArt";
 import { LudoAi, LudoBoard, LudoMove, LudoState, StageSpec } from "./LudoRules";
@@ -14,7 +14,7 @@ import { LudoAi, LudoBoard, LudoMove, LudoState, StageSpec } from "./LudoRules";
  * (Port of LudoBlitzGame.cs.)
  */
 
-const TopBand = 268, BottomBand = 250;
+const TopBand = 268, BottomBandBase = 250, BottomBandOnline = 340;
 const TileStep = 0.92;
 const RerollCost = 50;
 const GoldenSixCost = 100;
@@ -67,6 +67,26 @@ const FacePipIndices = [
 ];
 
 enum TurnPhase { AwaitRoll, RollingDice, AwaitMove, MovingToken, TurnDelay }
+
+// ------------------------------------------------------------------ online (private tables)
+// Host = seat 0 (RED), guest = seat 2 (GOLD, the opposite corner); with "+2 CPU" seats 1 and 3 are CPU rivals run by
+// the host. The host owns every dice roll and every CPU / host decision and broadcasts them as sequenced events
+// (OnlineLink moves); the guest only sends intents ("roll for me", "I picked token t") which the host validates.
+const HostSeat = 0, GuestSeat = 2;
+const OnlinePrize = 150, OnlineLosePrize = 10;
+const OnlineCpuNames = ["NOVA", "VEX", "KAI"];
+/** A new online match: active seats, tokens that start out, first seat to roll, CPU names and skill. */
+interface OStart { seats: number[]; out: number; first: number; names: string[]; skill: number }
+/** Host → guest events: a die roll for seat p, or seat p moving token tok (from step `from` with roll `roll`). */
+type OEv = { e: "roll"; p: number; v: number } | { e: "move"; p: number; tok: number; from: number; roll: number };
+/** Full board snapshot from the host (after a reconnect or a desync). `am` = the active LudoMove as numbers. */
+interface OSnap { start: OStart; steps: number[][]; turn: number; sixes: number; phase: number; roll: number; am: number[]; ended: number; winner: number }
+/** Guest → host intents (plain room messages next to the link's protocol; the link ignores them). */
+type OIntent = { t: "lb"; k: "roll"; seq: number } | { t: "lb"; k: "pick"; tok: number; seq: number } | { t: "lb"; k: "pause"; on: boolean };
+const moveToArr = (m: LudoMove) => [m.Player, m.TokenIndex, m.FromStep, m.ToStep, m.Roll, m.CapturedPlayer, m.CapturedTokenIndex, m.CapturedFromStep];
+const arrToMove = (a: number[]) => new LudoMove({
+  Player: a[0], TokenIndex: a[1], FromStep: a[2], ToStep: a[3], Roll: a[4], CapturedPlayer: a[5], CapturedTokenIndex: a[6], CapturedFromStep: a[7],
+});
 
 class YardView {
   Root!: GameObject;
@@ -253,6 +273,24 @@ export class LudoBlitzGame extends ArcadeGame {
   private attractTimer = 0;
   private need = new V2(15.2, 15.2);
 
+  // Online (private tables)
+  private lobby!: TableLobby; private overlay!: TableOverlay;
+  private link: OnlineLink<OStart, OEv, OSnap> | null = null;
+  private online = false; // the current match is an online one
+  private mySeat = HostSeat;
+  private onlineStart: OStart = { seats: [HostSeat, GuestSeat], out: 2, first: HostSeat, names: OnlineCpuNames, skill: 0.6 };
+  private onlineGo = false; private autoJoined = false; private forfeit = false;
+  private evQueue: OEv[] = []; // guest: host events waiting for the local animation to catch up
+  private optimisticTok = -1; // guest: own move already played locally, waiting for the host's echo
+  private askT = 0; // guest: a roll request is on its way
+  private syncT = 0; // guest: throttles snapshot requests
+  private pendingAsk = -1; // host: the friend asked to roll at this event count
+  private pendingPick: { tok: number; seq: number } | null = null; // host: the friend's chosen token
+  private forfeitT = -1; // friend left mid-match: the stayer's result shows after this delay
+  private lastPrize = 0;
+  private viewFlipped = false;
+  private onlineToggleBtn: ArcadeButton | null = null;
+
   protected Describe() {
     return new GameInfo({
       Id: "ludoblitz",
@@ -275,6 +313,7 @@ export class LudoBlitzGame extends ArcadeGame {
       HowTo: [
         howTo(Art.RoundSquare, RubyRed, "You are RUBY RED (bottom-left). Race all 4 tokens clockwise into the center Crown Goal!"),
         howTo(Art.Disc, RoyalGold, "Friends nearby? Tap the mode button on the title screen until it says OFFLINE: 2, 3 or 4 PLAYERS and pass the device around."),
+        howTo(Art.Ring, Pal.hex(0xff4fa0), "Friend far away? Pick ONLINE, then CREATE TABLE and send the 5-digit code (or the invite link). You both see your own colour at the bottom-left."),
         howTo(Art.Disc, AmberGold, "Roll a 6 to deploy a token from your yard AND earn a bonus roll. (Three 6s in a row forfeits the turn!)"),
         howTo(Art.Ring, Pal.Danger, "Land on a rival token on a non-safe tile to CAPTURE it back to its yard and earn a bonus roll!"),
         howTo(Art.Star, ElectricBlue, "Coloured Start tiles and glowing Star tiles are SAFE SHIELDS — no token can be captured there."),
@@ -290,7 +329,9 @@ export class LudoBlitzGame extends ArcadeGame {
     });
   }
 
-  protected get ShortSide() { return LudoBlitzGame.FitShortSide(this.need, TopBand, BottomBand); }
+  protected get ShortSide() { return LudoBlitzGame.FitShortSide(this.need, TopBand, this.BottomBand); }
+  /** Online matches keep a taller bottom band for the quick-reactions bar. */
+  private get BottomBand() { return this.online && this.State !== Phase.Title && Screen.width < Screen.height ? BottomBandOnline : BottomBandBase; }
 
   private get CurrentStageLevel() { return Math.max(1, this.Data.get("stage", 1)); }
   private set CurrentStageLevel(v: number) { this.Data.set("stage", Math.max(1, v)); }
@@ -309,12 +350,36 @@ export class LudoBlitzGame extends ArcadeGame {
   private get LocalPlayers() { return this.Data.get("localPlayers", 0); }
   private set LocalPlayers(v: number) { this.Data.set("localPlayers", v); }
 
-  /** True when this seat is controlled by a person (seat 0 vs the computer; every seat in pass-and-play). */
-  private IsHuman(seat: number) { return this.localMatch ? seat >= 0 && seat < LudoBoard.PlayerCount && this.state.ActivePlayers[seat] : seat === 0; }
+  /** ONLINE selected on the title screen (private table with a friend on their own device). */
+  private get SelOnline() { return this.Data.get("online", 0) === 1; }
+  /** Online table size: 2 = 1v1 duel, 4 = the two friends plus two CPU rivals. */
+  private get OnlineSeats() { return this.Data.get("onlineSeats", 2) === 4 ? 4 : 2; }
 
-  private SeatName(seat: number) { return this.localMatch ? SeatNames[seat] : seat === 0 ? "YOU" : this.currentStage.RivalNames[Mathf.clamp(seat - 1, 0, 2)]; }
+  private get FriendSeat() { return this.mySeat === HostSeat ? GuestSeat : HostSeat; }
+  private get IsHost() { return !this.link || this.link.isHost; }
+
+  /** True when this seat is controlled by a person (seat 0 vs the computer; every seat in pass-and-play; both friends online). */
+  private IsHuman(seat: number) {
+    if (this.online) return seat === HostSeat || seat === GuestSeat;
+    return this.localMatch ? seat >= 0 && seat < LudoBoard.PlayerCount && this.state.ActivePlayers[seat] : seat === 0;
+  }
+
+  /** True when this seat takes input on this device (online: only my own seat, and only while the friend is there). */
+  private IsLocal(seat: number) {
+    if (!this.online) return this.IsHuman(seat);
+    return seat === this.mySeat && !!this.link && this.link.connected && !this.overlay.busy;
+  }
+
+  /** Online seats whose rolls and moves arrive from the network: everything but my seat on the guest; the friend's seat on the host. */
+  private IsRemote(seat: number) { return this.online && (this.IsHost ? seat === this.FriendSeat : seat !== this.mySeat); }
+
+  private SeatName(seat: number) {
+    if (this.online) return seat === this.mySeat ? "YOU" : seat === this.FriendSeat ? "FRIEND" : this.currentStage.RivalNames[Mathf.clamp(seat - 1, 0, 2)];
+    return this.localMatch ? SeatNames[seat] : seat === 0 ? "YOU" : this.currentStage.RivalNames[Mathf.clamp(seat - 1, 0, 2)];
+  }
 
   protected BestLine() {
+    if (this.SelOnline) return `PRIVATE TABLE   ·   PLAY A FRIEND ON THEIR OWN PHONE   ·   WIN ${OnlinePrize} COINS`;
     const st = this.CurrentStageLevel;
     const spec = LudoBoard.GetStage(st);
     return `STAGE ${st}   ·   ${spec.ArenaName} (${spec.Subtitle})`;
@@ -346,8 +411,10 @@ export class LudoBlitzGame extends ArcadeGame {
     this.BuildWorldDice();
     this.BuildAudio();
     this.BuildHud();
+    this.BuildOnline();
     this.BuildTitleExtras();
     this.UpdateLayout();
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__lb = { game: this };
   }
 
   // ------------------------------------------------------------------ royal atmosphere
@@ -783,14 +850,19 @@ export class LudoBlitzGame extends ArcadeGame {
   private BuildTitleExtras() {
     if (!this.UI.TitleExtra) return;
 
-    this.blitzToggleBtn = UIKit.buttonAt(this.UI.TitleExtra, "START: CLASSIC", UIKit.Center, new V2(-210, 0), new V2(390, 86),
+    this.blitzToggleBtn = UIKit.buttonAt(this.UI.TitleExtra, "START: CLASSIC", UIKit.Center, new V2(-330, 0), new V2(318, 86),
       false, () => {
         this.BlitzRules = !this.BlitzRules;
         this.RefreshTitleExtraButtons();
-      }, 28);
+      }, 24);
 
-    this.seatsToggleBtn = UIKit.buttonAt(this.UI.TitleExtra, "RIVALS: STAGE AUTO", UIKit.Center, new V2(210, 0), new V2(390, 86),
+    this.seatsToggleBtn = UIKit.buttonAt(this.UI.TitleExtra, "RIVALS: STAGE AUTO", UIKit.Center, new V2(0, 0), new V2(318, 86),
       false, () => {
+        if (this.SelOnline) {
+          this.Data.set("onlineSeats", this.OnlineSeats === 2 ? 4 : 2);
+          this.RefreshTitleExtraButtons();
+          return;
+        }
         const local = this.LocalPlayers;
         if (local === 0) {
           const cur = this.SeatModeOverride;
@@ -798,7 +870,14 @@ export class LudoBlitzGame extends ArcadeGame {
           else this.SeatModeOverride = cur === 0 ? 2 : 4;
         } else this.LocalPlayers = local >= 4 ? 0 : local + 1;
         this.RefreshTitleExtraButtons();
-      }, 28);
+      }, 24);
+
+    // ONLINE: a private table with a friend on their own device (PLAY then opens the PRIVATE TABLE panel)
+    this.onlineToggleBtn = UIKit.buttonAt(this.UI.TitleExtra, "ONLINE", UIKit.Center, new V2(330, 0), new V2(318, 86),
+      false, () => {
+        this.Data.set("online", this.SelOnline ? 0 : 1);
+        this.RefreshTitleExtraButtons();
+      }, 24);
 
     this.RefreshTitleExtraButtons();
   }
@@ -813,10 +892,19 @@ export class LudoBlitzGame extends ArcadeGame {
       const m = this.SeatModeOverride;
       const local = this.LocalPlayers;
       if (this.seatsToggleBtn.label)
-        this.seatsToggleBtn.label.text = local >= 2 ? `OFFLINE: ${local} PLAYERS`
+        this.seatsToggleBtn.label.text = this.SelOnline ? (this.OnlineSeats === 4 ? "TABLE: 2 + 2 CPU" : "TABLE: 1v1 DUEL")
+          : local >= 2 ? `OFFLINE: ${local} PLAYERS`
           : m === 2 ? "VS AI: 1v1 DUEL" : m === 4 ? "VS AI: 4P ROYALE" : "VS AI: STAGE AUTO";
-      this.seatsToggleBtn.setAccent(local >= 2 ? RoyalGold : m === 4 ? RubyRed : m === 2 ? EmeraldGreen : ElectricBlue);
+      this.seatsToggleBtn.setAccent(this.SelOnline ? AmberGold : local >= 2 ? RoyalGold : m === 4 ? RubyRed : m === 2 ? EmeraldGreen : ElectricBlue);
     }
+    if (this.onlineToggleBtn) {
+      const on = this.SelOnline;
+      if (this.onlineToggleBtn.label) this.onlineToggleBtn.label.text = on ? "● ONLINE" : "ONLINE";
+      this.onlineToggleBtn.setAccent(on ? Pal.hex(0xff4fa0) : new Color(1, 1, 1, 0.45));
+    }
+    const play = (this.UI as unknown as { playButton?: ArcadeButton }).playButton;
+    if (play && play.label) play.label.text = this.SelOnline ? "PLAY ONLINE" : "PLAY STAGE";
+    if (this.State === Phase.Title) this.UI.ShowTitle(this.BestLine(), this.StatsLine());
   }
 
   // ------------------------------------------------------------------ layout & coordinate conversion
@@ -826,11 +914,11 @@ export class LudoBlitzGame extends ArcadeGame {
     return xy(this.boardRoot!.transformPoint(local));
   }
 
-  protected OnLayoutChanged() { this.UpdateLayout(); }
+  protected OnLayoutChanged() { this.UpdateLayout(); if (this.overlay) this.PlaceReactions(); }
 
   private UpdateLayout() {
     if (!this.boardRoot) return;
-    const r = this.PlayRect(TopBand, BottomBand, 0.22);
+    const r = this.PlayRect(TopBand, this.BottomBand, 0.22);
     this.Fx.CameraTarget = V2.zero;
 
     const boardWorldSpan = 15 * TileStep + 0.7;
@@ -866,14 +954,35 @@ export class LudoBlitzGame extends ArcadeGame {
   // ------------------------------------------------------------------ lifecycle & match setup
 
   protected OnEnterTitle() {
+    this.LeaveTable();
+    this.online = false;
+    this.SetViewFlip(false);
     this.SpeedMultiplier = 1;
     this.RefreshTitleExtraButtons();
     this.SetupMatch(this.CurrentStageLevel, true);
+    this.UpdateLayout();
+    // an invite link (?table=12345) opens the join panel and joins straight away
+    const code = tableCodeFromUrl();
+    if (code && !this.autoJoined) {
+      this.autoJoined = true;
+      this.Data.set("online", 1);
+      this.RefreshTitleExtraButtons();
+      this.lobby.open("join", code);
+    }
   }
 
   protected BeginRun() {
     this.SpeedMultiplier = 1;
     if (this.speedButton && this.speedButton.label) this.speedButton.label.text = "1X";
+    if (this.speedButton) this.speedButton.setAccent(RoyalGold);
+    this.mySeat = this.online && this.link ? (this.link.isHost ? HostSeat : GuestSeat) : HostSeat;
+    this.evQueue.length = 0;
+    this.optimisticTok = -1;
+    this.askT = 0;
+    this.pendingAsk = -1;
+    this.pendingPick = null;
+    this.forfeitT = -1;
+    this.forfeit = false;
 
     this.playerCapturesThisRun = 0;
     this.playerSixesThisRun = 0;
@@ -884,9 +993,17 @@ export class LudoBlitzGame extends ArcadeGame {
     this.lastWinnerPlayer = -1;
 
     this.SetupMatch(this.CurrentStageLevel, false);
+    this.SetViewFlip(this.online && this.mySeat === GuestSeat);
     this.UpdateLayout();
+    if (this.speedButton) this.speedButton.node.setActive(!this.online);
+    this.overlay.showBar(this.online);
+    this.PlaceReactions();
 
-    if (this.localMatch) {
+    if (this.online) {
+      const first = this.onlineStart.first;
+      this.UI.Announce(first === this.mySeat ? "YOU START" : first === this.FriendSeat ? "FRIEND STARTS" : `${this.SeatName(first)} STARTS`, PlayerColors[this.mySeat], 1.5);
+      if (this.Data.get("onlineGames", 0) === 0) this.UI.Hint(`You are ${SeatNames[this.mySeat]} (bottom-left). Tap the dice on your turn, then tap a glowing token.`);
+    } else if (this.localMatch) {
       this.UI.Announce(`OFFLINE · ${this.LocalPlayers} PLAYERS`, RoyalGold, 1.5);
       this.UI.Hint("Pass the device around: RED starts. Tap the dice on your turn, then tap a glowing token.");
     } else this.UI.Announce(`STAGE ${this.currentStage.StageNumber} · ${this.currentStage.ArenaName}`, RubyRed, 1.5);
@@ -900,8 +1017,16 @@ export class LudoBlitzGame extends ArcadeGame {
     this.currentStage = LudoBoard.GetStage(stageLevel);
 
     let seats = this.currentStage.ActiveSeats;
-    this.localMatch = !isAttract && this.LocalPlayers >= 2;
-    if (this.localMatch) {
+    const online = !isAttract && this.online;
+    this.localMatch = !isAttract && !online && this.LocalPlayers >= 2;
+    if (online) {
+      const st = this.onlineStart;
+      seats = st.seats.slice();
+      this.currentStage = {
+        ...this.currentStage, ArenaName: "PRIVATE TABLE", Subtitle: seats.length > 2 ? "2 FRIENDS + 2 CPU" : "1v1 FRIENDS",
+        ActiveSeats: seats, RivalNames: st.names.slice(0, 3), AiSkill: st.skill, DefaultTokensOut: st.out, WinCoins: OnlinePrize,
+      };
+    } else if (this.localMatch) {
       const n = this.LocalPlayers;
       seats = n === 2 ? [0, 2] : n === 3 ? [0, 1, 2] : [0, 1, 2, 3]; // 2 players sit opposite
     } else if (!isAttract) {
@@ -911,10 +1036,12 @@ export class LudoBlitzGame extends ArcadeGame {
       seats = [0, 1, 2, 3];
     }
 
-    if (this.rerollButton) this.rerollButton.node.setActive(!this.localMatch); // coin power-ups are single-player only
-    if (this.goldenSixButton) this.goldenSixButton.node.setActive(!this.localMatch);
+    // coin power-ups are single-player only (online they would let one friend buy dice)
+    if (this.rerollButton) this.rerollButton.node.setActive(!this.localMatch && !online);
+    if (this.goldenSixButton) this.goldenSixButton.node.setActive(!this.localMatch && !online);
 
-    const startOut = isAttract ? 2 : this.BlitzRules ? Math.max(2, this.currentStage.DefaultTokensOut) : stageLevel <= 2 ? 1 : 0;
+    const startOut = isAttract ? 2 : online ? this.onlineStart.out
+      : this.BlitzRules ? Math.max(2, this.currentStage.DefaultTokensOut) : stageLevel <= 2 ? 1 : 0;
 
     const targetState = isAttract ? this.attractState : this.state;
     targetState.InitMatch(seats, startOut);
@@ -940,7 +1067,7 @@ export class LudoBlitzGame extends ArcadeGame {
 
     this.SnapAllTokensToLogicalPositions();
     this.HideTargetMarkers();
-    this.BeginPlayerTurn(0, false);
+    this.BeginPlayerTurn(online ? this.onlineStart.first : 0, false);
   }
 
   private BeginPlayerTurn(player: number, isBonusTurn: boolean) {
@@ -959,6 +1086,8 @@ export class LudoBlitzGame extends ArcadeGame {
     this.phaseTimer = this.IsHuman(player) ? 0 : 0.36;
     if (this.localMatch && this.State === Phase.Playing && !isBonusTurn)
       this.UI.Float(this.DicePos, `${SeatNames[player]}'S TURN`, PlayerColors[player], 0.9);
+    if (this.online && this.State === Phase.Playing && !isBonusTurn && player === this.mySeat)
+      this.UI.Float(this.DicePos, "YOUR TURN!", PlayerColors[player], 0.9);
     this.UpdateHud();
   }
 
@@ -1013,7 +1142,21 @@ export class LudoBlitzGame extends ArcadeGame {
       this.coinBadge.localScale = new V3(cs, cs, 1);
     }
 
+    if (this.online) {
+      this.overlay.tick();
+      this.askT = Math.max(0, this.askT - dt);
+      this.syncT = Math.max(0, this.syncT - Time.unscaledDeltaTime);
+    }
+    if (this.forfeitT > 0) {
+      this.forfeitT -= Time.unscaledDeltaTime;
+      if (this.forfeitT <= 0) { this.forfeitT = -1; this.ShowOnlineResult(this.mySeat); }
+    }
     if (this.matchEnded) return;
+    if (this.online) {
+      // the friend dropped (or left): the table waits; the guest plays the host's events as its board catches up
+      if (!this.link || this.overlay.busy) { this.UpdateHud(); return; }
+      if (!this.IsHost) this.PlayQueuedEvent();
+    }
 
     switch (this.turnPhase) {
       case TurnPhase.AwaitRoll:
@@ -1038,19 +1181,26 @@ export class LudoBlitzGame extends ArcadeGame {
   }
 
   private TickAwaitRoll(dt: number) {
-    if (this.IsHuman(this.state.CurrentTurn)) {
+    if (this.IsLocal(this.state.CurrentTurn)) {
       // Player can press Space/Enter/Action or tap the board die / yard to roll
       if (this.Controls.actionPressed) {
-        this.TriggerRoll(-1, false);
+        this.HumanRoll();
         return;
       }
       if (this.Controls.tapped) {
         const tapWorld = this.ScreenToWorld(this.Controls.tapScreen);
         const distToDie = V2.distance(tapWorld, this.DicePos);
         if (distToDie < 1.6) {
-          this.TriggerRoll(-1, false);
+          this.HumanRoll();
           return;
         }
+      }
+    } else if (this.IsHuman(this.state.CurrentTurn) || this.IsRemote(this.state.CurrentTurn)) {
+      // online: the friend's roll (host: waits for their request; guest: every roll comes from the host)
+      if (this.online && this.IsHost && this.link && this.pendingAsk >= 0) {
+        const ok = this.pendingAsk === this.link.seq && this.state.CurrentTurn === this.FriendSeat;
+        this.pendingAsk = -1;
+        if (ok) this.TriggerRoll(-1, false);
       }
     } else {
       this.phaseTimer -= dt;
@@ -1067,6 +1217,8 @@ export class LudoBlitzGame extends ArcadeGame {
     const p = this.state.CurrentTurn;
     if (forcedValue >= 1 && forcedValue <= 6) this.currentRoll = forcedValue;
     else this.currentRoll = this.RollSmartDie(p);
+    // online: the host owns every roll and tells the guest
+    if (this.online && this.link && this.IsHost) this.SendEvent({ e: "roll", p, v: this.currentRoll });
 
     this.turnPhase = TurnPhase.RollingDice;
     this.diceAnimT = 0;
@@ -1140,7 +1292,7 @@ export class LudoBlitzGame extends ArcadeGame {
       Sfx.playClip(this.diceSixClip, 0.9, this.isGoldenRoll ? 1.12 : 1);
       this.Fx.ring(this.DicePos, RoyalGold, 0.2, 1.9, 0.35);
       this.SpawnConfetti(this.DicePos, 10, 5);
-      if (p === 0 && !this.localMatch) this.playerSixesThisRun++;
+      if (p === this.mySeat && !this.localMatch) this.playerSixesThisRun++;
     } else {
       Sfx.playClip(this.diceLandClip, 0.85, 0.95 + this.currentRoll * 0.03);
     }
@@ -1172,7 +1324,10 @@ export class LudoBlitzGame extends ArcadeGame {
       return;
     }
 
-    if (this.IsHuman(p)) {
+    if (this.IsRemote(p) || (this.online && this.IsHuman(p) && p !== this.mySeat)) {
+      this.turnPhase = TurnPhase.AwaitMove; // the friend's (or, on the guest, the host's) choice arrives over the network
+      this.phaseTimer = -1;
+    } else if (this.IsHuman(p)) {
       // Auto-move if all legal moves start from the same step (e.g. only 1 unique choice) AND player has no reroll needed
       const singleUniqueOption = hasOnlyOneDistinctMove(this.legalMoves);
       if (singleUniqueOption && this.legalMoves.length === 1) {
@@ -1193,6 +1348,17 @@ export class LudoBlitzGame extends ArcadeGame {
   private TickAwaitMove(dt: number) {
     const p = this.state.CurrentTurn;
 
+    if (this.online && (this.IsRemote(p) || (this.IsHuman(p) && !this.IsLocal(p)))) {
+      // waiting for the network; the host plays the friend's pick once its own board has reached that point
+      const pick = this.pendingPick;
+      if (this.IsHost && this.link && pick && p === this.FriendSeat) {
+        this.pendingPick = null;
+        const m = pick.seq === this.link.seq ? this.legalMoves.find((x) => x.TokenIndex === pick.tok) : undefined;
+        if (m) this.ExecuteMove(m); else this.link.pushState();
+      }
+      return;
+    }
+
     if (!this.IsHuman(p)) {
       this.phaseTimer -= dt;
       if (this.phaseTimer <= 0) {
@@ -1206,7 +1372,7 @@ export class LudoBlitzGame extends ArcadeGame {
     if (this.phaseTimer > 0) {
       this.phaseTimer -= dt;
       if (this.phaseTimer <= 0 && hasOnlyOneDistinctMove(this.legalMoves)) {
-        this.ExecuteMove(this.legalMoves[0]);
+        this.HumanPick(this.legalMoves[0]);
         return;
       }
     }
@@ -1214,7 +1380,7 @@ export class LudoBlitzGame extends ArcadeGame {
     // Keyboard shortcut: Space / Enter picks the best tactical move
     if (this.Controls.actionPressed && this.legalMoves.length > 0) {
       const best = LudoAi.ChooseMove(this.state, this.legalMoves, 1.0, this.rng);
-      this.ExecuteMove(best);
+      this.HumanPick(best);
       return;
     }
 
@@ -1246,7 +1412,7 @@ export class LudoBlitzGame extends ArcadeGame {
         }
       }
 
-      if (bestMoveIdx >= 0) this.ExecuteMove(this.legalMoves[bestMoveIdx]);
+      if (bestMoveIdx >= 0) this.HumanPick(this.legalMoves[bestMoveIdx]);
     }
   }
 
@@ -1291,7 +1457,8 @@ export class LudoBlitzGame extends ArcadeGame {
   private ExecuteMove(move: LudoMove) {
     this.HideTargetMarkers();
     this.activeMove = move;
-    if (move.Player === 0 && !this.localMatch) this.turnsPlayedThisRun++;
+    if (move.Player === this.mySeat && !this.localMatch) this.turnsPlayedThisRun++;
+    if (this.online && this.link && this.IsHost) this.SendEvent({ e: "move", p: move.Player, tok: move.TokenIndex, from: move.FromStep, roll: move.Roll });
 
     this.turnPhase = TurnPhase.MovingToken;
     const tv = this.tokenViews[move.Player][move.TokenIndex];
@@ -1382,6 +1549,11 @@ export class LudoBlitzGame extends ArcadeGame {
 
       if (this.localMatch) {
         this.UI.Float(landPos, `${SeatNames[am.Player]} CAPTURED ${SeatNames[cp]}!`, moverCol, 1.1);
+      } else if (this.online) {
+        if (am.Player === this.mySeat) { this.playerCapturesThisRun++; this.Data.add("captures", 1); }
+        const who = am.Player === this.mySeat ? "YOU" : this.SeatName(am.Player);
+        this.UI.Float(landPos, cp === this.mySeat ? `${who} CAPTURED YOU!` : `${who} CAPTURED ${this.SeatName(cp)}!`,
+          cp === this.mySeat ? Pal.Danger : moverCol, 1.1);
       } else if (am.Player === 0) {
         this.playerCapturesThisRun++;
         this.Data.add("captures", 1);
@@ -1407,7 +1579,7 @@ export class LudoBlitzGame extends ArcadeGame {
       const homeNow = state.HomeCount(am.Player);
       this.yardViews[am.Player].CountLabel.text = `HOME ${homeNow}/4`;
 
-      if (am.Player === 0 && !this.localMatch) {
+      if (am.Player === 0 && !this.localMatch && !this.online) {
         this.GrantCoins(25);
         this.UI.Float(landPos, `HOME! (${homeNow}/4) +25`, AmberGold, 1.12);
       } else {
@@ -1451,7 +1623,7 @@ export class LudoBlitzGame extends ArcadeGame {
       const reason = am.HasCapture ? "CAPTURE BONUS ROLL!"
         : am.ReachesGoal ? "HOME BONUS ROLL!"
           : "ROLLED 6 — BONUS ROLL!";
-      if (this.IsHuman(this.state.CurrentTurn)) this.UI.Float(this.DicePos, reason, AmberGold, 0.98);
+      if (this.online ? this.state.CurrentTurn === this.mySeat : this.IsHuman(this.state.CurrentTurn)) this.UI.Float(this.DicePos, reason, AmberGold, 0.98);
       this.BeginPlayerTurn(this.state.CurrentTurn, true);
     } else {
       const nextPlayer = this.state.NextActivePlayer(this.state.CurrentTurn);
@@ -1462,13 +1634,13 @@ export class LudoBlitzGame extends ArcadeGame {
   // ------------------------------------------------------------------ Power-Ups & Controls
 
   private OnDiceActionTriggered() {
-    if (this.State !== Phase.Playing || this.matchEnded || !this.IsHuman(this.state.CurrentTurn)) return;
+    if (this.State !== Phase.Playing || this.matchEnded || !this.IsLocal(this.state.CurrentTurn)) return;
 
     if (this.turnPhase === TurnPhase.AwaitRoll) {
-      this.TriggerRoll(-1, false);
+      this.HumanRoll();
     } else if (this.turnPhase === TurnPhase.AwaitMove && this.legalMoves.length > 0) {
       const best = LudoAi.ChooseMove(this.state, this.legalMoves, 1.0, this.rng);
-      this.ExecuteMove(best);
+      this.HumanPick(best);
     }
   }
 
@@ -1580,6 +1752,10 @@ export class LudoBlitzGame extends ArcadeGame {
       this.OnLocalMatchWon(winner);
       return;
     }
+    if (this.online) {
+      this.OnOnlineMatchWon(winner);
+      return;
+    }
     this.Data.add("games", 1);
 
     const playerWon = winner === 0;
@@ -1684,6 +1860,340 @@ export class LudoBlitzGame extends ArcadeGame {
     Sfx.play(Snd.PowerUp);
     this.BeginPlayerTurn(0, false);
     this.TriggerRoll(6, true);
+  }
+
+  // ------------------------------------------------------------------ online (private tables)
+
+  private BuildOnline() {
+    const theme = { accent: RubyRed, accent2: AmberGold, ink: Ebony };
+    this.lobby = new TableLobby("ludoblitz", theme, {
+      onReady: (room) => this.OnTableReady(room),
+      toast: (t, sec) => this.UI.Toast(t, sec ?? 2),
+    }, "Ludo Blitz");
+    this.overlay = new TableOverlay(theme, () => { this.overlay.hide(); this.EnterTitle(); }, (k) => this.link?.react(k));
+    this.overlay.onTimeout = () => { this.link?.leave(); this.FriendLeft(); };
+  }
+
+  /** Quick reactions: above the dice in portrait, bottom-left in landscape; the friend's pop up near the top. */
+  private PlaceReactions() {
+    if (Screen.width < Screen.height) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 262) }, { anchor: new V2(0.5, 1), pos: new V2(0, -300) });
+    else this.overlay.place({ anchor: new V2(0, 0), pos: new V2(300, 122) }, { anchor: new V2(0.5, 1), pos: new V2(0, -300) });
+  }
+
+  /** PLAY with ONLINE selected opens the PRIVATE TABLE lobby; REMATCH online asks the friend. */
+  protected StartRun() {
+    if (this.State === Phase.Paused && this.online) { this.UI.Toast("Restart isn't available online: use MENU to leave the table.", 2.5); return; }
+    if (this.SelOnline && !this.onlineGo) {
+      if (this.State === Phase.Over && this.link && this.link.connected) { this.AskRematch(); return; }
+      if (this.State === Phase.Over) this.EnterTitle();
+      if (!this.lobby.isOpen) {
+        this.lobby.createNote = (this.OnlineSeats === 4 ? "Your table: you two plus two CPU rivals" : "Your table: a 1v1 duel")
+          + (this.BlitzRules ? ", 2 tokens out at the start." : ", classic start.") + " Change it on the title screen.";
+        this.lobby.open("menu");
+      }
+      return;
+    }
+    this.online = this.onlineGo && !!this.link;
+    this.onlineGo = false;
+    super.StartRun();
+  }
+
+  private NewOnlineStart(first: number): OStart {
+    return { seats: this.OnlineSeats === 4 ? [0, 1, 2, 3] : [HostSeat, GuestSeat], out: this.BlitzRules ? 2 : 1, first, names: OnlineCpuNames, skill: 0.6 };
+  }
+
+  private OnTableReady(room: OnlineRoom) {
+    this.LeaveTable();
+    const link = new OnlineLink<OStart, OEv, OSnap>(room);
+    this.link = link;
+    room.onMessage((d) => { if (this.link === link) this.OnIntent(d as OIntent); });
+    link.bind({
+      onStart: (st) => {
+        this.onlineStart = st;
+        this.overlay.hide();
+        this.Data.set("online", 1);
+        this.onlineGo = true;
+        this.StartRun();
+      },
+      // only the host sends events; the guest checks their shape here and their fit when it plays them
+      validMove: (ev) => !link.isHost && !!ev && (ev.e === "roll" || ev.e === "move") && ev.p >= 0 && ev.p < LudoBoard.PlayerCount,
+      onMove: (ev) => this.OnEvent(ev),
+      snapshot: () => this.Snapshot(),
+      onSnapshot: (snap) => {
+        if (this.State === Phase.Over) return;
+        if (this.State !== Phase.Title) { if (this.online) this.Rebuild(snap); return; }
+        // joined (again) in the middle of a match: start from the host's state
+        this.onlineStart = snap.start;
+        this.overlay.hide();
+        this.Data.set("online", 1);
+        this.onlineGo = true;
+        this.StartRun();
+        this.Rebuild(snap);
+      },
+      onReaction: (k) => this.overlay.Pop(k, true),
+      onFriend: (st) => {
+        if (st === "connected") { if (this.overlay.state === "lost") { this.overlay.hide(); this.UI.Toast("Your friend is back!", 2); } }
+        else if (st === "lost") { if ((this.State === Phase.Playing || this.State === Phase.Paused) && this.online && !this.matchEnded) this.overlay.lost(30); }
+        else this.FriendLeft();
+      },
+      onRematchReady: () => { if (link.isHost) link.start(this.NewOnlineStart(link.match % 2 === 1 ? GuestSeat : HostSeat)); },
+      onFriendRematch: () => { if (this.overlay.state !== "rematch") this.UI.Toast("Your friend wants a rematch! Tap REMATCH.", 3); },
+    });
+    if (link.isHost) link.start(this.NewOnlineStart(HostSeat));
+    else this.UI.Toast("Joined! Waiting for the host to start…", 3);
+  }
+
+  /** Host: one of its rolls or moves (its own, a CPU's, or the friend's validated request) goes out. */
+  private SendEvent(ev: OEv) { this.link?.sendMove(ev); }
+
+  /** Guest: a host event arrives; it is played in order once the local board has caught up. */
+  private OnEvent(ev: OEv) {
+    if (ev.e === "move" && ev.p === this.mySeat && this.optimisticTok === ev.tok) { this.optimisticTok = -1; return; } // my own move, echoed
+    this.evQueue.push(ev);
+    if (this.evQueue.length > 10) this.RequestSync(); // far behind (tab was in the background): jump to the host's board
+  }
+
+  private PlayQueuedEvent() {
+    const ev = this.evQueue[0];
+    if (!ev) return;
+    const st = this.state;
+    if (ev.e === "roll") {
+      if (this.turnPhase !== TurnPhase.AwaitRoll) return;
+      if (ev.p !== st.CurrentTurn || ev.v < 1 || ev.v > 6) { this.RequestSync(); return; }
+      this.evQueue.shift();
+      this.askT = 0;
+      this.TriggerRoll(ev.v, false);
+    } else {
+      if (this.turnPhase !== TurnPhase.AwaitMove) return;
+      const m = ev.p === st.CurrentTurn && ev.roll === this.currentRoll
+        ? this.legalMoves.find((x) => x.TokenIndex === ev.tok && x.FromStep === ev.from) : undefined;
+      if (!m) { this.RequestSync(); return; }
+      this.evQueue.shift();
+      this.ExecuteMove(m);
+    }
+  }
+
+  private RequestSync() {
+    if (this.syncT > 0 || !this.link) return;
+    this.syncT = 2;
+    this.link.room.send({ t: "sync?" });
+  }
+
+  /** My roll: the host rolls itself; the guest asks the host (which owns every die). */
+  private HumanRoll() {
+    if (this.online && !this.IsHost) {
+      if (this.askT > 0 || !this.link) return;
+      this.askT = 3;
+      this.link.room.send({ t: "lb", k: "roll", seq: this.link.seq } satisfies OIntent);
+      Sfx.play(Snd.Click, 0.5);
+      return;
+    }
+    this.TriggerRoll(-1, false);
+  }
+
+  /** My move: the guest plays it at once (it is legal on the shared board) and tells the host, which echoes it. */
+  private HumanPick(m: LudoMove) {
+    if (this.online && !this.IsHost && this.link) {
+      this.optimisticTok = m.TokenIndex;
+      this.link.room.send({ t: "lb", k: "pick", tok: m.TokenIndex, seq: this.link.seq } satisfies OIntent);
+    }
+    this.ExecuteMove(m);
+  }
+
+  /** Host: the guest's requests (validated against the host's own board when it gets there). */
+  private OnIntent(d: OIntent) {
+    if (!d || d.t !== "lb" || !this.link) return;
+    if (d.k === "pause") { if (this.State === Phase.Playing || this.State === Phase.Paused) this.UI.Toast(d.on ? "Your friend paused the game." : "Your friend is back in the game.", 2); return; }
+    if (!this.link.isHost || !this.online || this.matchEnded || (this.State !== Phase.Playing && this.State !== Phase.Paused)) return;
+    if (d.k === "roll") {
+      if (d.seq !== this.link.seq) return; // stale (an event went out since): the guest asks again
+      this.pendingAsk = d.seq;
+      if (this.turnPhase === TurnPhase.AwaitRoll && this.state.CurrentTurn === this.FriendSeat) { this.pendingAsk = -1; this.TriggerRoll(-1, false); }
+    } else if (d.k === "pick") {
+      if (d.seq !== this.link.seq) { this.link.pushState(); return; }
+      this.pendingPick = { tok: d.tok, seq: d.seq };
+    }
+  }
+
+  private Snapshot(): OSnap {
+    return {
+      start: this.onlineStart, steps: this.state.Steps.map((r) => r.slice()), turn: this.state.CurrentTurn, sixes: this.state.ConsecutiveSixes,
+      phase: this.turnPhase, roll: this.currentRoll, am: moveToArr(this.activeMove), ended: this.matchEnded ? 1 : 0, winner: this.lastWinnerPlayer,
+    };
+  }
+
+  /** Guest: the host's snapshot replaces the local board, mid-turn included (after a reconnect or a desync). */
+  private Rebuild(snap: OSnap) {
+    this.evQueue.length = 0;
+    this.optimisticTok = -1;
+    this.askT = 0;
+    this.onlineStart = snap.start;
+    const st = this.state;
+    for (let p = 0; p < LudoBoard.PlayerCount; p++)
+      for (let t = 0; t < LudoBoard.TokensPerPlayer; t++) {
+        st.Steps[p][t] = snap.steps[p]?.[t] ?? LudoBoard.YardStep;
+        const tv = this.tokenViews[p][t];
+        tv.FlyT = -1;
+        tv.Visual.localPosition = V3.zero; tv.Visual.localScale = V3.one; tv.Visual.localRotation = Quaternion.identity;
+      }
+    this.matchEnded = false;
+    this.SnapAllTokensToLogicalPositions();
+    this.BeginPlayerTurn(snap.turn, true);
+    st.ConsecutiveSixes = snap.sixes;
+    const am = arrToMove(snap.am);
+    switch (snap.phase as TurnPhase) {
+      case TurnPhase.RollingDice:
+        this.TriggerRoll(snap.roll, false);
+        break;
+      case TurnPhase.AwaitMove:
+        this.currentRoll = snap.roll;
+        this.UpdateDiceVisuals(snap.roll, PlayerColors[snap.turn], snap.roll === 6);
+        st.GetLegalMoves(snap.turn, snap.roll, this.legalMoves);
+        this.turnPhase = this.legalMoves.length ? TurnPhase.AwaitMove : TurnPhase.TurnDelay;
+        this.phaseTimer = this.legalMoves.length ? -1 : 0.3;
+        if (this.legalMoves.length === 0) this.activeMove = new LudoMove();
+        else if (snap.turn === this.mySeat) {
+          this.ShowTargetMarkersForPlayer();
+          if (this.legalMoves.length === 1) this.phaseTimer = 0.24;
+        }
+        break;
+      case TurnPhase.MovingToken:
+        this.currentRoll = am.Roll;
+        this.UpdateDiceVisuals(am.Roll, PlayerColors[snap.turn], am.Roll === 6);
+        this.turnPhase = TurnPhase.AwaitMove;
+        this.ExecuteMove(am);
+        break;
+      case TurnPhase.TurnDelay:
+        this.currentRoll = snap.roll;
+        this.activeMove = am;
+        this.turnPhase = TurnPhase.TurnDelay;
+        this.phaseTimer = 0.2;
+        break;
+      default: break; // AwaitRoll: BeginPlayerTurn already set it up
+    }
+    if (snap.ended && snap.winner >= 0 && this.State === Phase.Playing) this.OnPlayerWonMatch(snap.winner);
+  }
+
+  private AskRematch() {
+    if (!this.link) return;
+    this.overlay.waitingRematch();
+    this.link.askRematch();
+  }
+
+  /** The friend left on purpose or never came back. */
+  private FriendLeft() {
+    const link = this.link;
+    const seq = link ? link.seq : 0;
+    this.link = null;
+    if (link && link.room.status !== "closed") link.room.close();
+    if ((this.State === Phase.Playing || this.State === Phase.Paused) && this.online && !this.matchEnded) {
+      this.matchEnded = true;
+      this.HideTargetMarkers();
+      let progress = 0;
+      for (let p = 0; p < LudoBoard.PlayerCount; p++) if (this.state.ActivePlayers[p]) progress = Math.max(progress, this.state.TotalProgressPercent(p));
+      if (seq >= 30 || progress >= 25) {
+        // the match was clearly underway: the player who stayed takes the win
+        this.forfeit = true;
+        this.overlay.hide();
+        this.forfeitT = 1.4;
+        this.UI.Announce("YOUR FRIEND LEFT", AmberGold, 1.4);
+        return;
+      }
+      this.overlay.left("Your friend left", "Not enough of the match was played for a result.");
+      return;
+    }
+    if (this.State === Phase.Over || this.overlay.state === "rematch") this.overlay.left("Your friend left", "No rematch this time.");
+  }
+
+  /** Leaving (menu, title): the friend is told and the room closes. */
+  private LeaveTable() {
+    if (this.link) { this.link.leave(); this.link = null; }
+    this.evQueue.length = 0;
+    this.optimisticTok = -1;
+    this.overlay?.hide();
+    this.overlay?.showBar(false);
+  }
+
+  protected OnPauseChanged(paused: boolean) {
+    if (this.online && this.link) this.link.room.send({ t: "lb", k: "pause", on: paused } satisfies OIntent);
+  }
+
+  /** Both devices reach the same finish (same events, same rules); each shows its own result. */
+  private OnOnlineMatchWon(winner: number) {
+    const boardPos = xy(this.boardRoot!.position);
+    if (winner === this.mySeat) {
+      Sfx.play(Snd.Win);
+      this.Fx.burst(boardPos, AmberGold, 65, 8.5, 0.30, 1.0);
+      this.Fx.burst(boardPos, PlayerColors[winner], 45, 7.0, 0.26, 0.9);
+      this.SpawnConfettiShower(ConfettiCount);
+    } else Sfx.play(Snd.Lose);
+    this.ShowOnlineResult(winner);
+  }
+
+  private ShowOnlineResult(winner: number) {
+    const me = this.mySeat, fr = this.FriendSeat;
+    const won = this.forfeit || winner === me, friendWon = !this.forfeit && winner === fr;
+    const prize = won ? OnlinePrize : OnlineLosePrize;
+    this.lastPrize = prize;
+    this.GrantCoins(prize);
+    if (won) this.Data.add("onlineWins", 1);
+    this.Data.add("onlineGames", 1);
+    this.overlay.showBar(false);
+    const a = this.state.HomeCount(me), b = this.state.HomeCount(fr);
+    this.Finish(new Result({
+      Headline: this.forfeit ? "FRIEND LEFT · YOU WIN!" : won ? "YOU WIN!" : friendWon ? "FRIEND WINS" : `${this.SeatName(winner)} WINS`,
+      HeadlineColor: won ? AmberGold : PlayerColors[winner],
+      Victory: won,
+      Value: `${a}/4 HOME`,
+      BestLine: `YOU ${a}/4 · FRIEND ${b}/4 HOME   ·   +${prize} COINS`,
+      Stats: [
+        ["YOUR HOME", `${a}/4`],
+        ["FRIEND'S HOME", `${b}/4`],
+        ["YOUR CAPTURES", String(this.playerCapturesThisRun)],
+        ["ONLINE WINS", String(this.Data.get("onlineWins", 0))],
+      ],
+      Primary: this.link ? "REMATCH" : "NEW TABLE",
+      Reward: won ? () => this.DoubleCoins() : null,
+      RewardLabel: `DOUBLE COINS: +${prize} (AD)`,
+    }));
+  }
+
+  private DoubleCoins() {
+    this.GrantCoins(this.lastPrize);
+    this.UI.Toast(`+${this.lastPrize} COINS: DOUBLED!`, 2.5);
+    Sfx.play(Snd.Coin, 0.8);
+  }
+
+  /**
+   * Guest view: the board turns 180° so the guest's GOLD corner sits bottom-left. Lit sprites (tiles, pawns' pits,
+   * stars, labels) turn back in place so the light still comes from the top-left; direction arrows turn with the board.
+   */
+  private SetViewFlip(on: boolean) {
+    if (!this.boardRoot || on === this.viewFlipped) return;
+    this.viewFlipped = on;
+    this.boardRoot.localEulerZ = on ? 180 : 0;
+    const turnsWithBoard = (n: string) => n === "StartChevron" || n === "Arrow" || n.startsWith("GoalTri_");
+    const walk = (g: GameObject) => {
+      for (const c of g.children) {
+        if (c === this.diceWorldRoot) continue;
+        if (c.getComponent(Renderer) && !turnsWithBoard(c.name)) {
+          c.localEulerZ = c.localEulerZ + 180;
+          if (/Shadow/.test(c.name)) c.localPosition = new V2(-c.localPosition.x, -c.localPosition.y);
+        }
+        walk(c);
+      }
+    };
+    walk(this.boardRoot);
+    if (this.diceWorldRoot) this.diceWorldRoot.localEulerZ = on ? 180 : 0;
+  }
+
+  /** Test hook: CSS pixel position of a world point. */
+  debugWorldToCss(p: V2) {
+    const c = document.querySelector("canvas");
+    if (!c) return null;
+    const r = c.getBoundingClientRect(), k = c.width / r.width;
+    const sp = Camera.worldToScreen(p);
+    return { x: r.left + sp.x / k, y: r.top + sp.y / k };
   }
 
   // ------------------------------------------------------------------ Visual Updates & Formations
@@ -1853,7 +2363,7 @@ export class LudoBlitzGame extends ArcadeGame {
       this.diceBouncePop = Mathf.moveTowards(this.diceBouncePop, 0, dt * 4.5);
       const popScale = 1 + 0.22 * Ease.outCubic(this.diceBouncePop);
       this.diceWorldRoot!.localScale = V3.one.mul(0.58 * popScale);
-    } else if (this.turnPhase === TurnPhase.AwaitRoll && this.IsHuman(this.state.CurrentTurn) && this.State === Phase.Playing) {
+    } else if (this.turnPhase === TurnPhase.AwaitRoll && this.IsLocal(this.state.CurrentTurn) && this.State === Phase.Playing && this.askT <= 0) {
       const pulse = 1 + 0.07 * Math.sin(time * 6);
       this.diceWorldRoot!.localScale = V3.one.mul(0.58 * pulse);
     }
@@ -1940,14 +2450,21 @@ export class LudoBlitzGame extends ArcadeGame {
     const state = this.state, turnPhase = this.turnPhase, currentRoll = this.currentRoll;
 
     this.coinCountText.text = Fmt.n(this.Coins);
-    this.stageTitleText.text = this.localMatch ? `OFFLINE MATCH · ${this.LocalPlayers} PLAYERS` : `STAGE ${this.currentStage.StageNumber} · ${this.currentStage.ArenaName}`;
+    this.stageTitleText.text = this.online ? `PRIVATE TABLE · ${this.onlineStart.seats.length > 2 ? "2 + 2 CPU" : "1v1"}`
+      : this.localMatch ? `OFFLINE MATCH · ${this.LocalPlayers} PLAYERS` : `STAGE ${this.currentStage.StageNumber} · ${this.currentStage.ArenaName}`;
 
     const p = state.CurrentTurn;
     const pCol = PlayerColors[p];
-    const pName = p === 0 && !this.localMatch ? "YOUR" : this.SeatName(p) + "'S";
+    const mine = this.online ? p === this.mySeat : this.IsHuman(p);
+    const pName = (this.online ? p === this.mySeat : p === 0 && !this.localMatch) ? "YOUR" : this.SeatName(p) + "'S";
 
-    if (this.IsHuman(p)) {
-      if (turnPhase === TurnPhase.AwaitRoll) {
+    if (mine) {
+      if (turnPhase === TurnPhase.AwaitRoll && this.askT > 0) {
+        this.turnBannerText.text = "ROLLING...";
+        this.turnBannerText.color = AmberGold;
+        this.diceHudPrompt.text = "ROLLING...";
+        this.diceHudSub.text = "GOOD LUCK!";
+      } else if (turnPhase === TurnPhase.AwaitRoll) {
         this.turnBannerText.text = this.localMatch ? `${SeatNames[p]}'S TURN — TAP DICE TO ROLL!` : "YOUR TURN — TAP DICE TO ROLL!";
         this.turnBannerText.color = pCol;
         this.diceHudPrompt.text = "ROLL DICE";
@@ -1971,7 +2488,7 @@ export class LudoBlitzGame extends ArcadeGame {
     } else {
       this.turnBannerText.text = `${pName} TURN` + (turnPhase === TurnPhase.AwaitMove || turnPhase === TurnPhase.MovingToken ? ` (ROLLED ${currentRoll})` : "...");
       this.turnBannerText.color = pCol;
-      this.diceHudPrompt.text = this.currentStage.RivalNames[Mathf.clamp(p - 1, 0, 2)];
+      this.diceHudPrompt.text = this.SeatName(p);
       this.diceHudSub.text = turnPhase === TurnPhase.RollingDice ? "ROLLING..." : `ROLLED ${currentRoll}`;
     }
 
@@ -1985,10 +2502,15 @@ export class LudoBlitzGame extends ArcadeGame {
         first = false;
       }
       this.subStatusText.text = sb;
+    } else if (this.online) {
+      let sb = `HOME: YOU ${state.HomeCount(this.mySeat)}/4   ·   FRIEND ${state.HomeCount(this.FriendSeat)}/4`;
+      for (let s = 0; s < LudoBoard.PlayerCount; s++)
+        if (state.ActivePlayers[s] && s !== HostSeat && s !== GuestSeat) sb += `   ·   ${this.SeatName(s)} ${state.HomeCount(s)}/4`;
+      this.subStatusText.text = sb;
     } else this.subStatusText.text = `HOME: YOU ${state.HomeCount(0)}/4   ·   CAPTURES: ${this.playerCapturesThisRun}`;
     if (this.localMatch) this.diceHudSub.text = turnPhase === TurnPhase.AwaitRoll ? `${SeatNames[p]} · TAP TO ROLL` : this.diceHudSub.text;
 
-    const human = this.IsHuman(p);
+    const human = this.online ? this.IsLocal(p) && this.askT <= 0 : this.IsHuman(p);
     this.diceHudButton.setAccent(human ? (turnPhase === TurnPhase.AwaitMove ? AmberGold : pCol) : Pal.TextDim);
     this.diceHudButton.interactable = human && (turnPhase === TurnPhase.AwaitRoll || turnPhase === TurnPhase.AwaitMove) && !this.matchEnded;
 

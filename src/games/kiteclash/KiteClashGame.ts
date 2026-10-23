@@ -2,10 +2,12 @@ import {
   AdService, ArcadeButton, ArcadeGame, Art, AudioClip, CasualArt, CasualFx, CasualLook, Color, Fmt, GameInfo, GameObject, howTo,
   Image, Keyboard, LineRenderer, LoopSource, Mathf, Mouse, overUI, Pal, Phase, Result, Screen, Sfx, Snd, SpriteRenderer, SysRandom,
   Text, TextAnchor, Time, Touchscreen, TouchScheme, UIKit, UINode, V2, V3, Camera,
+  OnlineLink, OnlineRoom, tableCodeFromUrl, TableLobby, TableOverlay,
 } from "../../kit";
+import { applySnap, Canon, CanonAnchor, CanonLaunch, InputHz, InputMsg, KSnap, lerpSnap, NetEvent, PauseMsg, snapKite, StateHz, StateMsg, unflat, ViewMap } from "./KiteNet";
 import { Confetti, Designs, KiteArt, Strings } from "./KiteArt";
 import { BotLevel, BotLevels, KiteBot } from "./KiteBot";
-import { Clash, Kite, KState, PickKind, Sky, SkyEvent } from "./KitePhysics";
+import { Clash, Kite, KState, PickKind, Rope, Sky, SkyEvent } from "./KitePhysics";
 
 /**
  * KITE CLASH: the rooftop kite-fighting festival as a fast arcade duel. A fighter kite spins while its string is
@@ -15,11 +17,15 @@ import { Clash, Kite, KState, PickKind, Sky, SkyEvent } from "./KitePhysics";
  * Coins from cuts and wins buy kite designs and string colours in the KITE SHOP.
  */
 
-enum Mode { Solo, Daily, Vs, TwoP }
+enum Mode { Solo, Daily, Vs, TwoP, Online }
 enum Step { Intro, Play, Cut, Over }
 
 const SoloTime = 120, RoundTime = 60, HeatAt = 38, WinCuts = 2;
-const ModeNames = ["SOLO", "DAILY", "VS CPU", "2 PLAYERS"];
+const ModeNames = ["SOLO", "DAILY", "VS CPU", "2 PLAYERS", "ONLINE"];
+const OnlinePrize = 60;
+/** Online match payloads (OnlineLink): the host's kite and string; a snapshot carries the match score. */
+interface OStart { d: number; s: number; seed: number }
+interface OSnap { w: number[]; r: number; d: number[] }
 const DiffNames = ["EASY", "MEDIUM", "HARD"];
 const WinCoins = [30, 50, 80];
 const SoloStars = [1000, 2500, 4200];
@@ -55,6 +61,19 @@ function todaySeed() { const d = new Date(); return d.getFullYear() * 10000 + (d
 export class KiteClashGame extends ArcadeGame {
   /** Test hook: scales simulated time (the headless test machine runs at a low frame rate). */
   static TestTimeScale = 1;
+  /** Test hook: artificial latency + jitter (ms) on everything this device sends at an online table. */
+  static NetLag = { ms: 0, jitter: 0 };
+
+  // online
+  private lobby!: TableLobby; private overlay!: TableOverlay;
+  private link: OnlineLink<OStart, number, OSnap> | null = null;
+  private onlineGo = false; private autoJoined = false; private onlineStart: OStart = { d: 0, s: 0, seed: 1 };
+  private seat = 0; private view = new ViewMap();
+  private netSim: Sky | null = null; private local: Kite | null = null;
+  private netWins = [0, 0]; private netDesigns: number[] = [0, 0, 2, 1]; private resumeWins: number[] | null = null;
+  private states: StateMsg[] = []; private offsetEst = -1e9; private evLog: NetEvent[] = []; private evId = 0; private lastEv = 0;
+  private inSeq = 0; private lastIn = 0; private sendT = 0; private mePaused = false; private friendPaused = false;
+  private forfeit = false; private netEnded = false; private lastStateBytes = 0; private barOn = false; private designT = 0;
 
   private world!: GameObject;
   private skyBg!: SpriteRenderer; private sun!: SpriteRenderer; private sunGlow!: SpriteRenderer;
@@ -166,7 +185,7 @@ export class KiteClashGame extends ArcadeGame {
   private get StrSel() { return Mathf.clamp(this.Data.get("str"), 0, Strings.length - 1); }
   private HasKite(i: number) { return i === 0 || this.Data.get("uk" + i) === 1; }
   private HasStr(i: number) { return i === 0 || this.Data.get("us" + i) === 1; }
-  private get SelMode(): Mode { return Mathf.clamp(this.Data.get("mode"), 0, 3) as Mode; }
+  private get SelMode(): Mode { return Mathf.clamp(this.Data.get("mode"), 0, 4) as Mode; }
   private get SelDiff() { return Mathf.clamp(this.Data.get("diff", 1), 0, 2); }
 
   protected BestLine() {
@@ -174,6 +193,7 @@ export class KiteClashGame extends ArcadeGame {
       case Mode.Solo: return `SKY FESTIVAL BEST ${Fmt.n(this.Data.get("best"))}`;
       case Mode.Daily: return `DAILY ${this.DailyLabel()}  ·  TODAY'S BEST ${Fmt.n(this.Data.get("dDate") === todaySeed() ? this.Data.get("dBest") : 0)}`;
       case Mode.Vs: { const d = this.SelDiff; return `VS CPU ${DiffNames[d]}:  ${this.Data.get("w" + d)} WON · ${this.Data.get("l" + d)} LOST`; }
+      case Mode.Online: return `ONLINE: ${this.Data.get("onlineWins")} WINS IN ${this.Data.get("onlineGames")} MATCHES`;
       default: return `PLAYER 1  ${this.Data.get("p0")} – ${this.Data.get("p1")}  PLAYER 2`;
     }
   }
@@ -245,6 +265,7 @@ export class KiteClashGame extends ArcadeGame {
     this.BuildSounds();
     this.BuildHud();
     this.BuildTitle();
+    this.BuildOnline();
     this.Layout();
   }
 
@@ -393,7 +414,7 @@ export class KiteClashGame extends ArcadeGame {
 
   private LayoutHud() {
     const two = this.mode === Mode.TwoP && this.portrait && this.State !== Phase.Title;
-    const duel = this.mode === Mode.Vs || this.mode === Mode.TwoP;
+    const duel = this.mode === Mode.Vs || this.mode === Mode.TwoP || this.mode === Mode.Online;
     for (let i = 0; i < 2; i++) {
       const p = this.panels[i];
       if (two) {
@@ -433,9 +454,9 @@ export class KiteClashGame extends ArcadeGame {
     const ex = this.UI.TitleExtra;
     if (!ex) return;
     CasualLook.titleCard(this.UI, new Color(0.12, 0.05, 0.22, 0.38), new V2(1060, 1080), -10);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < ModeNames.length; i++) {
       const idx = i;
-      const b = UIKit.buttonAt(ex, ModeNames[i], UIKit.Center, new V2((i - 1.5) * 245, 0), new V2(230, 92), false, () => this.PickMode(idx), 28);
+      const b = UIKit.buttonAt(ex, ModeNames[i], UIKit.Center, new V2((i - 2) * 200, 0), new V2(190, 92), false, () => this.PickMode(idx), 24);
       this.modeButtons.push(b);
     }
     this.optButton = UIKit.buttonAt(ex, "OPTION", UIKit.Center, new V2(-185, -108), new V2(350, 86), false, () => this.CycleOpt(), 28);
@@ -490,9 +511,9 @@ export class KiteClashGame extends ArcadeGame {
   private RefreshTitle() {
     if (this.modeButtons.length === 0) return;
     const m = this.SelMode;
-    const accents = [Coral, Gold, Sky1, Pal.hex(0x4ee08a)];
+    const accents = [Coral, Gold, Sky1, Pal.hex(0x4ee08a), Pal.hex(0xb46bff)];
     this.modeButtons.forEach((b, i) => b.setAccent(i === m ? accents[i] : new Color(1, 1, 1, 0.45)));
-    const label = m === Mode.Solo ? "2 MIN · 3 STRINGS" : m === Mode.Daily ? `DAILY · ${this.DailyLabel()}` : m === Mode.Vs ? "CPU: " + DiffNames[this.SelDiff] : "BEST OF 3 CUTS";
+    const label = m === Mode.Solo ? "2 MIN · 3 STRINGS" : m === Mode.Daily ? `DAILY · ${this.DailyLabel()}` : m === Mode.Vs ? "CPU: " + DiffNames[this.SelDiff] : m === Mode.Online ? "PRIVATE TABLE" : "BEST OF 3 CUTS";
     if (this.optButton.label) this.optButton.label.text = label;
     this.optButton.setAccent(accents[m]);
     this.optButton.interactable = true;
@@ -629,6 +650,7 @@ export class KiteClashGame extends ArcadeGame {
     const unit = Math.min(V.x, V.y) / 1080;
     const top = H2 - (this.mode === Mode.TwoP && this.portrait ? 150 : this.portrait ? 230 : 160) * unit;
     this.sky.arena = { xMin: -W2 + 0.9, xMax: W2 - 0.9, yMin: rb + 1.7, yMax: top - 0.6 };
+    this.view?.set(this.sky.arena, this.seat === 1 && this.mode === Mode.Online);
     if (this.UI) this.LayoutHud();
   }
 
@@ -643,6 +665,7 @@ export class KiteClashGame extends ArcadeGame {
   // ------------------------------------------------------------------ lifecycle
 
   protected OnEnterTitle() {
+    this.LeaveTable();
     this.attract = true;
     this.mode = Mode.Vs;
     this.Layout();
@@ -653,6 +676,15 @@ export class KiteClashGame extends ArcadeGame {
     for (const z of this.zoneHint) z.gameObject.setActive(false);
     if (this.zipLoop) this.zipLoop.volume = 0;
     if (this.sawLoop) this.sawLoop.volume = 0;
+    // an invite link (?table=12345) opens the join panel and joins straight away
+    const code = tableCodeFromUrl();
+    if (code && !this.autoJoined && this.lobby) {
+      this.autoJoined = true;
+      this.Data.set("mode", Mode.Online);
+      this.RefreshTitle();
+      this.UI.ShowTitle(this.BestLine(), this.StatsLine());
+      this.lobby.open("join", code);
+    }
   }
 
   private ApplyTitleKites() {
@@ -672,6 +704,7 @@ export class KiteClashGame extends ArcadeGame {
     this.Data.add("games", 1);
     this.Layout();
     if (this.mode === Mode.Solo || this.mode === Mode.Daily) this.SetupSolo();
+    else if (this.mode === Mode.Online) this.SetupOnline();
     else this.SetupDuel(false);
     this.LayoutHud();
     Sfx.setIntensity(0.65);
@@ -811,6 +844,7 @@ export class KiteClashGame extends ArcadeGame {
 
   protected OnPauseChanged(paused: boolean) {
     this.touchOwner.clear(); this.mouseOwner = -1;
+    if (this.mode === Mode.Online && this.link) { this.mePaused = paused; this.link.room.send({ t: "kp", p: paused ? 1 : 0 } satisfies PauseMsg); }
     if (paused) { if (this.zipLoop) this.zipLoop.volume = 0; if (this.sawLoop) this.sawLoop.volume = 0; }
   }
 
@@ -819,6 +853,8 @@ export class KiteClashGame extends ArcadeGame {
   protected TickBackground(dt: number) {
     if (this.State === Phase.Title && this.attract) {
       this.TickAttract(dt);
+    } else if (this.mode === Mode.Online) {
+      this.OnlineDisplay(dt);
     } else {
       this.sky.step(dt * 0.5);
       this.sky.drainEvents();
@@ -846,6 +882,7 @@ export class KiteClashGame extends ArcadeGame {
     const dt = dt0 * KiteClashGame.TestTimeScale;
     this.ReadInput();
     if (this.mode === Mode.Solo || this.mode === Mode.Daily) this.TickSolo(dt);
+    else if (this.mode === Mode.Online) this.TickOnline(dt0);
     else this.TickDuel(dt);
     this.zoneT = Math.max(0, this.zoneT - dt0);
     for (let i = 0; i < 2; i++) {
@@ -1152,6 +1189,515 @@ export class KiteClashGame extends ArcadeGame {
     }
   }
 
+  // ------------------------------------------------------------------ online (private tables)
+
+  private BuildOnline() {
+    const theme = { accent: P1Col, accent2: P2Col, ink: Ink };
+    this.lobby = new TableLobby("kiteclash", theme, {
+      onReady: (room) => this.OnTableReady(room),
+      toast: (t, sec) => this.UI.Toast(t, sec ?? 2),
+    }, "Kite Clash");
+    this.lobby.createNote = "A real-time kite duel: best of 3 cuts. You both fly from the left roof on your own screen.";
+    this.overlay = new TableOverlay(theme, () => { this.overlay.hide(); this.EnterTitle(); }, (k) => this.link?.react(k));
+    this.overlay.onTimeout = () => { this.link?.leave(); this.FriendLeft(); };
+  }
+
+  /** PLAY with ONLINE selected opens the lobby; REMATCH online asks the friend. */
+  protected StartRun() {
+    if (this.State === Phase.Paused && this.mode === Mode.Online) { this.UI.Toast("Restart isn't available online: use MENU to leave the table.", 2.5); return; }
+    if (this.SelMode === Mode.Online && !this.onlineGo) {
+      if (this.State === Phase.Over && this.link && this.link.connected) { this.overlay.waitingRematch(); this.link.askRematch(); return; }
+      if (this.State === Phase.Over) this.EnterTitle();
+      if (!this.lobby.isOpen) this.lobby.open("menu");
+      return;
+    }
+    this.onlineGo = false;
+    super.StartRun();
+  }
+
+  /** A real-time match keeps running when the window loses focus (the friend is still flying). */
+  onFocusLost() { if (this.mode === Mode.Online && this.link && this.State === Phase.Playing) return; super.onFocusLost(); }
+
+  update() {
+    super.update();
+    this.lobby?.tick(Time.unscaledDeltaTime);
+    this.overlay?.tick();
+    this.NetPump(Time.unscaledDeltaTime);
+  }
+
+  private OnTableReady(room: OnlineRoom) {
+    this.LeaveTable();
+    const lag = KiteClashGame.NetLag;
+    if (lag.ms > 0) {
+      // test hook: artificial latency + jitter on everything this device sends
+      const send = room.send.bind(room);
+      room.send = (d: unknown) => { window.setTimeout(() => send(d), lag.ms + Math.random() * lag.jitter); };
+    }
+    const link = new OnlineLink<OStart, number, OSnap>(room);
+    this.link = link;
+    this.seat = link.me;
+    this.view.set(this.sky.arena, this.seat === 1);
+    room.onMessage((d) => this.OnNetMessage(d as { t?: string }));
+    link.bind({
+      onStart: (st) => {
+        this.onlineStart = st;
+        this.overlay.hide();
+        this.Data.set("mode", Mode.Online);
+        this.onlineGo = true;
+        this.resumeWins = null;
+        this.StartRun();
+      },
+      validMove: () => false,
+      onMove: () => {},
+      snapshot: () => ({ w: this.netWins.slice(), r: this.round, d: this.netDesigns.slice() }),
+      onSnapshot: (snap) => {
+        if (this.State === Phase.Playing && this.mode === Mode.Online) return; // the state stream keeps us in sync
+        if (snap.r <= 0) return;
+        // joined (again) in the middle of a match: continue from the host's score
+        this.overlay.hide();
+        this.Data.set("mode", Mode.Online);
+        this.onlineGo = true;
+        this.resumeWins = snap.w.slice();
+        this.StartRun();
+      },
+      onReaction: (k) => this.overlay.Pop(k, true),
+      onFriend: (st) => {
+        if (st === "connected") {
+          if (this.overlay.state === "lost") { this.overlay.hide(); this.UI.Toast("Your friend is back!", 2); }
+          this.SendDesign();
+        } else if (st === "lost") { if (this.State === Phase.Playing && this.mode === Mode.Online && this.step !== Step.Over) this.overlay.lost(30); }
+        else this.FriendLeft();
+      },
+      onRematchReady: () => { if (link.isHost) link.start({ d: this.KiteSel, s: this.StrSel, seed: Math.floor(Math.random() * 1e9) }); },
+      onFriendRematch: () => { if (this.overlay.state !== "rematch") this.UI.Toast("Your friend wants a rematch! Tap REMATCH.", 3); },
+    });
+    this.SendDesign();
+    if (link.isHost) link.start({ d: this.KiteSel, s: this.StrSel, seed: Math.floor(Math.random() * 1e9) });
+    else this.UI.Toast("Joined! Waiting for the host to start…", 3);
+  }
+
+  private SendDesign() { if (this.link && !this.link.isHost) this.link.room.send({ t: "kd", d: this.KiteSel, s: this.StrSel }); }
+
+  private OnNetMessage(m: { t?: string }) {
+    if (!m || !this.link) return;
+    if (m.t === "kd" && this.link.isHost) {
+      const d = m as unknown as { d: number; s: number };
+      this.netDesigns[2] = Mathf.clamp(d.d | 0, 0, Designs.length - 1); this.netDesigns[3] = Mathf.clamp(d.s | 0, 0, Strings.length - 1);
+      if (this.netSim && this.netSim.kites[1]) { this.netSim.kites[1].design = this.netDesigns[2]; this.netSim.kites[1].stringColor = this.netDesigns[3]; }
+    } else if (m.t === "kp") {
+      const p = (m as PauseMsg).p === 1;
+      if (p !== this.friendPaused) this.UI.Toast(p ? "Your friend paused the game." : "Your friend is back: fly!", 2);
+      this.friendPaused = p;
+    } else if (m.t === "kg" && this.link.isHost) this.OnGuestInput(m as InputMsg);
+    else if (m.t === "ks" && !this.link.isHost) this.OnHostState(m as StateMsg);
+  }
+
+  /** Both devices: set up the duel; the host also builds the canonical simulation. */
+  private SetupOnline() {
+    const seed = this.onlineStart.seed || 1;
+    this.ClearSky(seed);
+    this.sky.canClash = () => false;
+    this.sky.birdEvery = 0; this.sky.pickEvery = 0;
+    this.Layout();
+    this.view.set(this.sky.arena, this.seat === 1);
+    // display kites: slot 0 = me (left roof), slot 1 = friend
+    const me = this.NewKite(0, this.KiteSel, this.StrSel, 1), fr = this.NewKite(1, 2, 1, -1);
+    this.humans = [me];
+    for (let i = 0; i < 2; i++) { const f = this.flyers[i]; f.sr.gameObject.setActive(true); }
+    this.netWins = this.resumeWins ? this.resumeWins.slice() : [0, 0];
+    this.resumeWins = null;
+    this.round = this.netWins[0] + this.netWins[1];
+    this.netDesigns[0] = this.onlineStart.d; this.netDesigns[1] = this.onlineStart.s;
+    if (this.seat === 0) { this.netDesigns[2] = this.netDesigns[2] ?? 2; }
+    this.states = []; this.offsetEst = -1e9; this.lastEv = 0; this.inSeq = 0; this.lastIn = 0; this.sendT = 0;
+    this.mePaused = this.friendPaused = false; this.forfeit = false; this.netEnded = false;
+    this.local = null; this.netSim = null; this.evLog = [];
+    if (this.seat === 0) {
+      const sim = new Sky(seed);
+      sim.arena = { ...Canon };
+      sim.birdEvery = 16; sim.pickEvery = 19;
+      sim.canClash = () => true;
+      const a = new Kite(0), b = new Kite(1);
+      a.design = this.KiteSel; a.stringColor = this.StrSel; a.spinDir = 1;
+      b.design = this.netDesigns[2]; b.stringColor = this.netDesigns[3]; b.spinDir = -1;
+      sim.kites = [a, b];
+      this.netSim = sim;
+      this.StartNetRound();
+    } else {
+      this.local = new Kite(1);
+      this.local.spinDir = -1; this.local.anchor = CanonAnchor(1);
+      this.local.design = this.KiteSel; this.local.stringColor = this.StrSel;
+      this.step = Step.Intro; this.stepT = 2.6; this.roundT = 0;
+    }
+    me.design = this.KiteSel; me.stringColor = this.StrSel;
+    void fr;
+    this.countStep = -1;
+    this.UpdateDisplayWins();
+    if (this.netWins[0] + this.netWins[1] === 0) this.UI.Toast("You fly from the LEFT roof. HOLD anywhere to pull, cross your friend's string to cut it!", 4);
+  }
+
+  /** Host: a new round in the canonical sky. */
+  private StartNetRound() {
+    const sim = this.netSim!;
+    sim.clashes = [];
+    for (const b of sim.birds) b.active = false;
+    for (const p of sim.pickups) p.active = false;
+    sim.heat = 1;
+    sim.kites.forEach((k, i) => { k.launch(CanonAnchor(i), CanonLaunch(i), 1.6); k.safeT = 0; });
+    this.roundT = 0;
+    this.step = Step.Intro;
+    this.stepT = 2.6;
+    this.round++;
+    this.heatWarned = false;
+    Sfx.playClip(this.launchClip, 0.6);
+  }
+
+  private TickOnline(dt: number) {
+    const host = this.seat === 0;
+    const frozen = !this.link || !this.link.connected || this.mePaused || this.friendPaused || this.overlay.busy;
+    if (host && this.netSim) {
+      if (!frozen) this.HostStep(dt);
+    } else if (!host && this.local) {
+      const st = this.states[this.states.length - 1];
+      if (!frozen && st && !st.pz) {
+        this.stepT -= dt;
+        if (this.step === Step.Play) this.roundT += dt;
+        const k = this.local;
+        k.hold = this.step === Step.Play && k.flying && this.HumanHold(0);
+        const wind = st ? new V2(st.wd[0], st.wd[1]) : V2.zero;
+        if (k.state === KState.Fly) k.step(dt, wind, Canon, Time.time);
+      }
+    }
+    this.Countdown();
+    this.OnlineDisplay(dt);
+    const bar = this.State === Phase.Playing && this.step !== Step.Over;
+    if (this.barOn !== bar) {
+      this.barOn = bar;
+      if (this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 90) }, { anchor: new V2(0.5, 1), pos: new V2(0, -330) });
+      else this.overlay.place({ anchor: new V2(0, 0), pos: new V2(290, 70) }, { anchor: new V2(0.5, 1), pos: new V2(0, -260) });
+      this.overlay.showBar(bar);
+    }
+  }
+
+  /** Host: run the match one frame in the canonical sky. */
+  private HostStep(dt: number) {
+    const sim = this.netSim!, ks = sim.kites;
+    this.stepT -= dt;
+    ks[0].hold = this.step === Step.Play && ks[0].flying && this.HumanHold(0);
+    if (this.step !== Step.Play) ks[1].hold = false;
+    if (this.step === Step.Intro && this.stepT <= 0) this.step = Step.Play;
+    if (this.step === Step.Play) {
+      this.roundT += dt;
+      sim.heat = this.roundT > HeatAt ? 1 + (this.roundT - HeatAt) / 6 : 1;
+      if (this.roundT >= RoundTime) this.NetRoundWon(ks[0].pos.y >= ks[1].pos.y ? 0 : 1, true);
+    }
+    sim.step(dt);
+    for (const e of sim.drainEvents()) {
+      if (e.type === "cut") {
+        const w = ks.indexOf(e.winner), l = ks.indexOf(e.loser);
+        this.NetEvent({ e: "cut", w, k: l, x: e.at.x, y: e.at.y });
+        this.NetRoundWon(w, false);
+      } else if (e.type === "crash") {
+        const l = ks.indexOf(e.kite);
+        this.NetEvent({ e: "crash", k: l, x: e.kite.pos.x, y: e.kite.pos.y });
+        this.NetRoundWon(1 - l, false);
+      } else if (e.type === "bird") this.NetEvent({ e: "bird", k: ks.indexOf(e.kite), x: e.bird.pos.x, y: e.bird.pos.y });
+      else if (e.type === "pickup") this.NetEvent({ e: "pick", k: ks.indexOf(e.kite), g: e.pickup.kind === PickKind.Glass ? 1 : 0, x: e.pickup.pos.x, y: e.pickup.pos.y });
+      else if (e.type === "gust") this.NetEvent({ e: "gust", x: e.wind.x });
+    }
+    if (this.step === Step.Cut && this.stepT <= 0) {
+      if (this.netWins[0] >= WinCuts || this.netWins[1] >= WinCuts) { this.step = Step.Over; this.NetEvent({ e: "end", sc: this.netWins.slice() }); this.OnlineResult(); }
+      else this.StartNetRound();
+    }
+  }
+
+  private NetRoundWon(w: number, timeUp: boolean) {
+    if (this.step !== Step.Play) return;
+    this.netWins[w]++;
+    this.step = Step.Cut;
+    this.stepT = 3.0;
+    for (const k of this.netSim!.kites) k.hold = false;
+    this.NetEvent({ e: "round", w, sc: this.netWins.slice(), tu: timeUp ? 1 : 0 });
+  }
+
+  /** Host: log an event for the guest (repeated in the next states) and play it here. */
+  private NetEvent(ev: Omit<NetEvent, "i">) {
+    const e = { ...ev, i: ++this.evId } as NetEvent;
+    if (e.x !== undefined) e.x = Math.round(e.x * 100) / 100;
+    if (e.y !== undefined) e.y = Math.round(e.y * 100) / 100;
+    this.evLog.push(e);
+    if (this.evLog.length > 8) this.evLog.shift();
+    this.PlayNetEvent(e);
+  }
+
+  /** Both devices: sounds, effects and announcements for a match event (canonical seats). */
+  private PlayNetEvent(e: NetEvent) {
+    const mine = e.k === this.seat;
+    const at = e.x !== undefined ? this.view.xy(e.x, e.y ?? 0) : V2.zero;
+    const disp = (seat: number) => this.sky.kites[seat === this.seat ? 0 : 1];
+    switch (e.e) {
+      case "cut": {
+        const loser = disp(e.k ?? 0);
+        this.CutFx(at, loser, true);
+        this.UI.Announce(Cheers[Math.floor(Math.random() * Cheers.length)], mine ? Bad : Gold, 1.0);
+        if (mine) Sfx.playClip(this.lostClip, 0.6);
+        break;
+      }
+      case "crash":
+        this.fx.pop(at, Color.white, 12, 4, 0.18, 0.5);
+        this.UI.Announce(mine ? "TANGLED ON THE ROOFS!" : "FRIEND TANGLED!", mine ? Bad : Gold, 1.2);
+        Sfx.playClip(this.lostClip, 0.6);
+        break;
+      case "bird":
+        Sfx.playClip(this.chirpClip, 0.7, 0.9 + Math.random() * 0.3);
+        for (let i = 0; i < 8; i++) this.fx.emit(at, Random2().mul(2.5), Pal.hex(0x3a3050), 0.18, 0.9, CasualArt.Dot, 2, 300, true, 2);
+        if (mine) { this.UI.Float(at.add(new V2(0, 1)), "WOBBLE!", Pal.hex(0xffe0a0), 0.8); if (this.local) this.local.wobbleT = 1.3; }
+        break;
+      case "pick": {
+        const glass = e.g === 1;
+        Sfx.playClip(this.chimeClip, 0.85);
+        this.fx.sparkle(at, glass ? Pal.hex(0x9ff6ff) : Color.white, 14, 1.0, 0.45);
+        this.UI.Float(at.add(new V2(0, 1.2)), (mine ? "" : "FRIEND: ") + (glass ? "GLASS STRING!" : "WIND BOOST!"), mine ? Pal.hex(0x9ff6ff) : Bad, 0.9);
+        if (mine && this.local) { if (glass) this.local.glassT = 10; else this.local.boostT = 6; }
+        break;
+      }
+      case "gust":
+        Sfx.playClip(this.gustClip, 0.5);
+        this.UI.Float(new V2(0, this.sky.arena.yMax - 1.5), `WIND SHIFT ${((e.x ?? 1) >= 0) === (this.seat === 0) ? "→" : "←"}`, Color.white, 0.8);
+        break;
+      case "round": {
+        const sc = e.sc ?? this.netWins;
+        const a = sc[this.seat], b = sc[1 - this.seat], won = e.w === this.seat;
+        const done = Math.max(a, b) >= WinCuts;
+        if (e.tu) this.UI.Announce("TIME! HIGHER KITE WINS", Gold, 1.6);
+        if (!e.tu) { /* the cut already cheered */ } else { Sfx.playClip(this.cheerClip, 0.6); this.cheerT = 2; }
+        const t = done ? (won ? "YOU WIN!" : "FRIEND WINS") : `YOU ${a} – ${b} FRIEND`;
+        this.startCoroutine((function* (self: KiteClashGame) {
+          let t0 = 0;
+          while (t0 < 1.1) { t0 += Time.unscaledDeltaTime; yield; }
+          self.UI.Announce(t, won ? Gold : Bad, 1.5);
+        })(this));
+        break;
+      }
+      case "end": break;
+    }
+  }
+
+  private Countdown() {
+    if (this.step !== Step.Intro) { if (this.countStep > 0 && this.step === Step.Play) { this.countStep = 0; this.UI.Announce(this.round <= 1 ? "FLY!" : `ROUND ${this.round}`, Coral, 0.9); Sfx.play(Snd.BeepHigh, 0.7); } return; }
+    const n = Math.ceil(this.stepT / 0.8);
+    if (n !== this.countStep && n >= 1 && n <= 3) { this.countStep = n; this.UI.Announce(String(n), Gold, 0.7); Sfx.play(Snd.Beep, 0.6); }
+  }
+
+  private UpdateDisplayWins() { this.roundWins = [this.netWins[this.seat], this.netWins[1 - this.seat]]; }
+
+  /** Host: receive the guest's hold and predicted kite (accepted within a tolerance). */
+  private OnGuestInput(m: InputMsg) {
+    if (!this.link || m.m !== this.link.match || m.s <= this.lastIn || !this.netSim) return;
+    this.lastIn = m.s;
+    const k = this.netSim.kites[1];
+    k.hold = !!m.h && this.step === Step.Play && k.flying;
+    if (k.state !== KState.Fly) return;
+    const p = new V2(m.x, m.y);
+    if (V2.distance(p, k.pos) > 4) return; // too far from what the host simulates: keep the host's kite
+    const A = Canon;
+    k.pos = new V2(Mathf.clamp(p.x, A.xMin, A.xMax), Mathf.clamp(p.y, A.yMin, A.yMax));
+    k.vel = V2.clampMagnitude(new V2(m.vx, m.vy), 14);
+    k.ang = m.a; k.spin = Mathf.clamp01(m.sp);
+  }
+
+  /** Guest: a host state arrives. */
+  private OnHostState(m: StateMsg) {
+    if (!this.link || m.m !== this.link.match) return;
+    if (this.State !== Phase.Playing && this.State !== Phase.Paused) {
+      if (this.State === Phase.Over || m.st === Step.Over) return;
+      return;
+    }
+    const now = performance.now();
+    const sample = m.T - now;
+    this.offsetEst = this.offsetEst < -1e8 ? sample : sample > this.offsetEst ? sample : this.offsetEst + (sample - this.offsetEst) * 0.02;
+    const last = this.states[this.states.length - 1];
+    if (last && m.T <= last.T) return;
+    this.states.push(m);
+    while (this.states.length > 30) this.states.shift();
+    // match flow follows the host
+    if (m.st !== this.step) { this.step = m.st as Step; }
+    this.stepT = m.sT; this.roundT = m.rT; this.round = m.r;
+    this.netWins = m.w.slice();
+    this.netDesigns = m.d.slice();
+    // the host may have missed my kite design (sent before it was listening): repeat it until it shows up
+    if ((m.d[2] !== this.KiteSel || m.d[3] !== this.StrSel) && performance.now() - this.designT > 1000) { this.designT = performance.now(); this.SendDesign(); }
+    for (const e of m.ev) if (e.i > this.lastEv) { this.lastEv = e.i; this.PlayNetEvent(e); }
+    // my own kite: predicted here; adopt the host's version on launches, cuts and big disagreements
+    const k = this.local, hs = m.k[1];
+    if (k) {
+      k.anchor = CanonAnchor(1);
+      if (k.state !== KState.Fly || hs.st !== KState.Fly || V2.distance(k.pos, new V2(hs.x, hs.y)) > 4) applySnap(k, hs);
+      if (Math.abs(k.glassT - hs.gt) > 1.5) k.glassT = hs.gt;
+      if (Math.abs(k.boostT - hs.bt) > 1.5) k.boostT = hs.bt;
+      k.safeT = hs.sf ? 0.5 : 0;
+    }
+    if (m.st === Step.Over && !this.netEnded) { this.netEnded = true; this.UpdateDisplayWins(); this.OnlineResult(); }
+  }
+
+  /** Both devices: send state (host) or input (guest). Runs every frame, also while paused or on the result. */
+  private NetPump(dt: number) {
+    const link = this.link;
+    if (!link || this.mode !== Mode.Online || !link.connected || link.match === 0) return;
+    if (this.State !== Phase.Playing && this.State !== Phase.Paused && this.State !== Phase.Over) return;
+    this.sendT -= dt;
+    if (this.sendT > 0) return;
+    if (link.isHost && this.netSim) {
+      this.sendT = 1 / StateHz;
+      const sim = this.netSim, r2 = (v: number) => Math.round(v * 100) / 100;
+      const msg: StateMsg = {
+        t: "ks", m: link.match, T: Math.round(performance.now()), st: this.step, sT: r2(this.stepT), rT: r2(this.roundT), w: this.netWins, r: this.round,
+        wd: [r2(sim.wind.x), r2(sim.wind.y)], k: sim.kites.map((k) => snapKite(k)),
+        b: sim.birds.filter((b) => b.active).map((b) => [r2(b.pos.x), r2(b.pos.y), r2(b.flap), b.vel.x < 0 ? 1 : 0]),
+        p: sim.pickups.filter((p) => p.active).map((p) => [p.kind, r2(p.pos.x), r2(p.pos.y), r2(p.t), p.life]),
+        c: sim.clashes.map((c) => [r2(c.point.x), r2(c.point.y), r2(c.meter), r2(c.net), c.crossing ? 1 : 0]),
+        d: [sim.kites[0].design, sim.kites[0].stringColor, sim.kites[1].design, sim.kites[1].stringColor],
+        ev: this.evLog, pz: this.mePaused || this.friendPaused ? 1 : 0,
+      };
+      link.room.send(msg);
+      this.lastStateBytes = JSON.stringify(msg).length;
+    } else if (!link.isHost && this.local && this.State === Phase.Playing) {
+      this.sendT = 1 / InputHz;
+      const k = this.local, r2 = (v: number) => Math.round(v * 100) / 100;
+      link.room.send({ t: "kg", m: link.match, s: ++this.inSeq, h: k.hold ? 1 : 0, x: r2(k.pos.x), y: r2(k.pos.y), vx: r2(k.vel.x), vy: r2(k.vel.y), a: Math.round(k.ang * 10) / 10, sp: r2(k.spin) } satisfies InputMsg);
+    }
+  }
+
+  /** Both devices: map the canonical match onto this screen (mirrored for the guest). */
+  private OnlineDisplay(dt: number) {
+    void dt;
+    this.UpdateDisplayWins();
+    const W2 = this.ViewSize.x / 2, f = this.portrait ? 0.55 : 0.6;
+    const hands = [this.HandAt(-W2 * f, false), this.HandAt(W2 * f, true)];
+    const d = this.sky.kites;
+    if (d.length < 2) return;
+    let ks: KSnap[] | null = null, wind = V2.zero;
+    let birds: number[][] = [], picks: number[][] = [], clashes: number[][] = [];
+    if (this.seat === 0 && this.netSim) {
+      const sim = this.netSim;
+      ks = sim.kites.map((k) => snapKite(k));
+      wind = sim.wind;
+      birds = sim.birds.filter((b) => b.active).map((b) => [b.pos.x, b.pos.y, b.flap, b.vel.x < 0 ? 1 : 0]);
+      picks = sim.pickups.filter((p) => p.active).map((p) => [p.kind, p.pos.x, p.pos.y, p.t, p.life]);
+      clashes = sim.clashes.map((c) => [c.point.x, c.point.y, c.meter, c.net, c.crossing ? 1 : 0]);
+      d[1].design = sim.kites[1].design; d[1].stringColor = sim.kites[1].stringColor;
+    } else if (this.states.length) {
+      // the friend's kite and the sky: interpolated ~100 ms behind the host
+      const renderT = performance.now() + this.offsetEst - 100;
+      let a = this.states[0], b = a;
+      for (let i = 0; i < this.states.length; i++) { if (this.states[i].T <= renderT) a = this.states[i]; if (this.states[i].T >= renderT) { b = this.states[i]; break; } b = this.states[i]; }
+      const t = b.T > a.T ? Mathf.clamp01((renderT - a.T) / (b.T - a.T)) : 1;
+      const k0 = lerpSnap(a.k[0], b.k[0], t);
+      ks = [k0, this.local ? snapKite(this.local) : b.k[1]];
+      wind = new V2(b.wd[0], b.wd[1]);
+      birds = b.b.map((bb) => { const aa = a.b.find((x) => Math.abs(x[0] - bb[0]) < 1.5 && Math.abs(x[1] - bb[1]) < 1); return aa ? [aa[0] + (bb[0] - aa[0]) * t, aa[1] + (bb[1] - aa[1]) * t, bb[2], bb[3]] : bb; });
+      picks = b.p; clashes = b.c;
+      d[1].design = b.d[0]; d[1].stringColor = b.d[1];
+    }
+    if (!ks) return;
+    for (let slot = 0; slot < 2; slot++) {
+      const seat = slot === 0 ? this.seat : 1 - this.seat;
+      this.ToDisplay(ks[seat], d[slot], hands[slot]);
+    }
+    const V = this.view;
+    this.sky.wind = new V2(V.mx * wind.x, wind.y);
+    this.sky.windTarget = this.sky.wind;
+    this.sky.birds.forEach((bd, i) => {
+      const s = birds[i];
+      bd.active = !!s;
+      if (!s) return;
+      bd.pos = V.xy(s[0], s[1]); bd.flap = s[2]; bd.vel = new V2((s[3] ? -1 : 1) * V.mx, 0);
+    });
+    this.sky.pickups.forEach((pk, i) => {
+      const s = picks[i];
+      pk.active = !!s;
+      if (!s) return;
+      pk.kind = s[0] as PickKind; pk.pos = V.xy(s[1], s[2]); pk.t = s[3]; pk.life = s[4];
+    });
+    this.sky.clashes = clashes.map((c) => {
+      const cl = new Clash(d[0], d[1]);
+      cl.point = V.xy(c[0], c[1]);
+      cl.meter = this.seat === 0 ? c[2] : -c[2];
+      cl.net = c[3]; cl.crossing = c[4] === 1;
+      return cl;
+    });
+  }
+
+  private ToDisplay(s: KSnap, k: Kite, hand: V2) {
+    const V = this.view;
+    k.pos = V.xy(s.x, s.y); k.vel = V.v(new V2(s.vx, s.vy)); k.ang = V.ang(s.a);
+    k.state = s.st as KState; k.hold = s.h === 1;
+    k.glassT = s.gt; k.boostT = s.bt; k.safeT = s.sf ? 1 : 0; k.flash = s.fl; k.lowT = s.lt; k.cutT = s.ct;
+    k.anchor = hand;
+    const pts = V.pts(unflat(s.r));
+    if (pts.length >= 2) { pts[0] = hand; k.rope.pts = pts; }
+    if (s.lo) { const r = k.loose ?? new Rope(V2.zero, V2.up, 2); r.pts = V.pts(unflat(s.lo)); if (r.pts.length) r.pts[0] = hand; k.loose = r; } else k.loose = null;
+    if (s.ta) { const r = k.tail ?? new Rope(V2.zero, V2.up, 2); r.pts = V.pts(unflat(s.ta)); k.tail = r; } else k.tail = null;
+  }
+
+  /** The friend left on purpose or never came back. */
+  private FriendLeft() {
+    const link = this.link;
+    this.link = null;
+    if (link && link.room.status !== "closed") link.room.close();
+    if (this.mode === Mode.Online && this.State === Phase.Playing && this.step !== Step.Over) {
+      if (this.netWins[0] + this.netWins[1] > 0 || this.roundT > 20) {
+        // the match was underway: the player who stayed takes the win
+        this.forfeit = true;
+        this.overlay.hide();
+        this.step = Step.Over;
+        this.UI.Announce("YOUR FRIEND LEFT", Gold, 1.4);
+        this.OnlineResult();
+        return;
+      }
+      this.step = Step.Over;
+      this.overlay.left("Your friend left", "The match had only just started, so there is no result.");
+      return;
+    }
+    if (this.State === Phase.Over || this.overlay.state === "rematch") this.overlay.left("Your friend left", "No rematch this time.");
+  }
+
+  /** Leaving (menu, title): the friend is told and the room closes. */
+  private LeaveTable() {
+    if (this.link) { this.link.leave(); this.link = null; }
+    this.netSim = null; this.local = null;
+    this.overlay?.hide();
+    this.overlay?.showBar(false);
+    this.barOn = false;
+  }
+
+  private OnlineResult() {
+    if (this.State !== Phase.Playing && this.State !== Phase.Paused) return;
+    if (this.State === Phase.Paused) this.Resume();
+    this.UpdateDisplayWins();
+    const [a, b] = this.roundWins;
+    const won = this.forfeit || a > b;
+    const prize = won ? OnlinePrize : 10;
+    this.coinsRun = prize;
+    this.Data.add("coins", prize);
+    if (won) this.Data.add("onlineWins", 1);
+    this.Data.add("onlineGames", 1);
+    this.overlay.showBar(false);
+    this.barOn = false;
+    this.doubled = false;
+    const r = new Result({
+      Headline: this.forfeit ? "FRIEND LEFT · YOU WIN!" : won ? "YOU WIN!" : "FRIEND WINS",
+      HeadlineColor: won ? Gold : Pal.hex(0xffb0b8), Victory: won,
+      Value: `${a} – ${b}`,
+      BestLine: `YOU ${a} · FRIEND ${b}   ·   +${prize} COINS`,
+      Stats: [["YOUR CUTS", String(a)], ["FRIEND'S CUTS", String(b)], ["MATCH", String(this.link?.match ?? 1)], ["COINS", `+${prize}  (◉${this.Coins})`]],
+      Primary: this.link ? "REMATCH" : "NEW TABLE",
+    });
+    if (won) { r.Reward = () => this.DoubleCoins(); r.RewardLabel = `DOUBLE COINS: +${prize} MORE (WATCH AD)`; }
+    this.lastResult = r;
+    this.Finish(r);
+  }
+
   // ------------------------------------------------------------------ input
 
   private ZoneOf(screen: V2) {
@@ -1427,7 +1973,7 @@ export class KiteClashGame extends ArcadeGame {
   }
 
   private FeetX(k: Kite) { return k.anchor.x; }
-  private FlyerFlip(k: Kite) { return k.anchor.x > ((this.humans[0] && this.mode !== Mode.TwoP && this.mode !== Mode.Vs) ? this.SoloAnchorX() + 0.5 : 0); }
+  private FlyerFlip(k: Kite) { return k.anchor.x > ((this.humans[0] && (this.mode === Mode.Solo || this.mode === Mode.Daily)) ? this.SoloAnchorX() + 0.5 : 0); }
 
   private RenderKite(v: KiteView, k: Kite, human: boolean, i: number) {
     const t = Time.time;
@@ -1487,7 +2033,7 @@ export class KiteClashGame extends ArcadeGame {
       v.arrow.transform.localEulerZ = k.ang;
       const s = big ? 0.85 : 0.55;
       v.arrow.transform.localScale = new V3(s, s, 1);
-      const col = this.mode === Mode.TwoP ? (this.humans.indexOf(k) === 0 ? P1Col : P2Col) : Color.white;
+      const col = this.mode === Mode.TwoP ? (this.humans.indexOf(k) === 0 ? P1Col : P2Col) : this.mode === Mode.Online ? (this.seat === 0 ? P1Col : P2Col) : Color.white;
       v.arrow.color = Color.lerp(col, Color.white, 0.35).withAlpha(k.hold ? 0.95 : 0.7);
     }
     // tail: a little chain hanging from the bottom tip
@@ -1525,11 +2071,13 @@ export class KiteClashGame extends ArcadeGame {
       set(this.glassBadge, me && me.glassT > 0 ? `GLASS STRING ${Math.ceil(me.glassT)}` : me && me.boostT > 0 ? `WIND BOOST ${Math.ceil(me.boostT)}` : "");
     } else {
       const ks = this.sky.kites;
-      const names = this.mode === Mode.TwoP ? ["PLAYER 1", "PLAYER 2"] : ["YOU", "CPU " + DiffNames[this.diff]];
+      const online = this.mode === Mode.Online;
+      const names = this.mode === Mode.TwoP ? ["PLAYER 1", "PLAYER 2"] : online ? ["YOU", "FRIEND"] : ["YOU", "CPU " + DiffNames[this.diff]];
       const left = Math.max(0, RoundTime - this.roundT);
+      const seatCol = (i: number) => (online ? ((i === 0) === (this.seat === 0) ? 0 : 1) : i);
       this.panels.forEach((p, i) => {
         set(p.name, names[i]);
-        p.name.color = i === 0 ? Pal.hex(0x9cc4ff) : Pal.hex(0xffa6a8);
+        p.name.color = seatCol(i) === 0 ? Pal.hex(0x9cc4ff) : Pal.hex(0xffa6a8);
         p.pips.forEach((im, k) => {
           im.sprite = KiteArt.Kite(ks[i]?.design ?? 0);
           im.color = k < this.roundWins[i] ? Color.white : new Color(0.55, 0.55, 0.7, 0.45);
@@ -1608,6 +2156,12 @@ export class KiteClashGame extends ArcadeGame {
       portrait: this.portrait, arena: this.sky.arena, goal: this.tutGoal,
       kites: this.sky.kites.map((k) => ({ id: k.id, x: k.pos.x, y: k.pos.y, ang: k.ang, spinDir: k.spinDir, state: k.state, hold: k.hold, human: this.humans.includes(k), ax: k.anchor.x, ay: k.anchor.y, css: toCss(k.pos), vx: k.vel.x, vy: k.vel.y })),
       clashes: this.sky.clashes.map((c) => ({ a: c.a.id, b: c.b.id, meter: c.meter, crossing: c.crossing, x: c.point.x, y: c.point.y })),
+      net: this.link || this.mode === Mode.Online ? {
+        seat: this.seat, wins: this.netWins, st: this.step, round: this.round, roundT: this.roundT, status: this.link?.room.status ?? "none", match: this.link?.match ?? 0,
+        code: this.link?.room.code ?? "", overlay: this.overlay.state, bytes: this.lastStateBytes,
+        canon: this.netSim ? this.netSim.kites.map((k) => ({ x: k.pos.x, y: k.pos.y, st: k.state })) : this.states.length ? this.states[this.states.length - 1].k.map((k) => ({ x: k.x, y: k.y, st: k.st })) : [],
+        local: this.local ? { x: this.local.pos.x, y: this.local.pos.y, st: this.local.state } : null,
+      } : null,
     };
   }
 }

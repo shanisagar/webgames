@@ -380,8 +380,8 @@ export class CarromGame extends ArcadeGame {
       this.walletNode.place(UIKit.Center, new V2(right, toHud(0, -BoardHalf).y + 190), new V2(260, 76));
     }
     this.cards[1].root.localEulerAngles = new V3(0, 0, flip ? 180 : 0);
-    if (this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 70) }, { anchor: new V2(0.5, 1), pos: new V2(0, -330) });
-    else this.overlay.place({ anchor: new V2(1, 0), pos: new V2(-270, 300) }, { anchor: new V2(0, 0.5), pos: new V2(260, 0) });
+    if (this.overlay && this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 70) }, { anchor: new V2(0.5, 1), pos: new V2(0, -330) });
+    else if (this.overlay) this.overlay.place({ anchor: new V2(1, 0), pos: new V2(-270, 300) }, { anchor: new V2(0, 0.5), pos: new V2(260, 0) });
     this.Present(0);
   }
 
