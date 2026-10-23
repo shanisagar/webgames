@@ -54,7 +54,25 @@ jobs:
           cd ../devsrc
           # Reuse main's packages unless dev changed them.
           if cmp -s package-lock.json "$GITHUB_WORKSPACE/package-lock.json"; then ln -s "$GITHUB_WORKSPACE/node_modules" node_modules; else npm ci; fi
-          VITE_DEV_PREVIEW=1 VITE_RELEASE="dev-$(git rev-parse --short HEAD)" npx vite build --outDir "$GITHUB_WORKSPACE/dist/dev" --emptyOutDir
+          VITE_DEV_PREVIEW=1 VITE_RELEASE="dev-$(git rev-parse --short HEAD)" npx vite build --outDir "$RUNNER_TEMP/devdist" --emptyOutDir
+      # With Cloudflare set up, the dev preview goes to its own Cloudflare Pages project (put Cloudflare Access in
+      # front of it for a private site) and is no longer published on GitHub Pages. Without Cloudflare, or if that
+      # deploy fails, it stays at <site>/dev/ behind the admin login.
+      - name: Publish dev preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEV_PROJECT: ${{ vars.CLOUDFLARE_DEV_PROJECT || 'webgames-dev' }}
+        run: |
+          [ -d "$RUNNER_TEMP/devdist" ] || { echo "No dev preview built."; exit 0; }
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            npx --yes wrangler@4.147.0 pages project create "$DEV_PROJECT" --production-branch main 2>/dev/null || true
+            if npx --yes wrangler@4.147.0 pages deploy "$RUNNER_TEMP/devdist" --project-name "$DEV_PROJECT" --branch main --commit-dirty=true; then
+              echo "Dev preview published to Cloudflare Pages project $DEV_PROJECT."; exit 0
+            fi
+            echo "::warning::Cloudflare deploy of the dev preview failed; publishing it at /dev/ instead."
+          fi
+          mkdir -p dist/dev && cp -r "$RUNNER_TEMP/devdist/." dist/dev/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
