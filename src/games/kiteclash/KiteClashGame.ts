@@ -352,8 +352,8 @@ export class KiteClashGame extends ArcadeGame {
     this.windNode = UIKit.node("Wind", hud).place(new V2(0, 1), new V2(110, -205), new V2(150, 76));
     UIKit.img(this.windNode, "Bg", Art.UiRound, Ink.withAlpha(0.45)).rectTransform.stretch();
     this.windArrow = UIKit.img(this.windNode, "Arrow", Art.Chevron, Color.white);
-    this.windArrow.rectTransform.place(UIKit.Center, new V2(-36, 0), new V2(46, 46));
-    this.windLabel = UIKit.at(UIKit.label(this.windNode, "WIND", 22, Color.white), UIKit.Center, new V2(26, 0), new V2(90, 30));
+    this.windArrow.rectTransform.place(UIKit.Center, new V2(-42, 0), new V2(42, 42));
+    this.windLabel = UIKit.at(UIKit.label(this.windNode, "WIND", 22, Color.white), UIKit.Center, new V2(30, 0), new V2(90, 30));
     // duel panels
     for (let i = 0; i < 2; i++) {
       const p = new SidePanel();
