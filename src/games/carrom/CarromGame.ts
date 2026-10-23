@@ -381,7 +381,10 @@ export class CarromGame extends ArcadeGame {
     }
     this.cards[1].root.localEulerAngles = new V3(0, 0, flip ? 180 : 0);
     if (this.overlay && this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 70) }, { anchor: new V2(0.5, 1), pos: new V2(0, -330) });
-    else if (this.overlay) this.overlay.place({ anchor: new V2(1, 0), pos: new V2(-270, 300) }, { anchor: new V2(0, 0.5), pos: new V2(260, 0) });
+    else if (this.overlay) {
+      const right = this.UI.WorldToHud(this.TableToWorld(new V2(this.rot ? -ContentHalfW : ContentHalfW, 0))).x + 30 + 210;
+      this.overlay.place({ anchor: UIKit.Center, pos: new V2(right, 190) }, { anchor: new V2(0, 0.5), pos: new V2(260, 0) });
+    }
     this.Present(0);
   }
 
