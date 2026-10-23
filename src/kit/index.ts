@@ -7,6 +7,7 @@ export * from "./sfx";
 export * from "./prefs";
 export * from "./fx";
 export * from "./input";
+export * from "./wall";
 export * from "./ads";
 export * from "./ui";
 export * from "./shell";
