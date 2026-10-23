@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { GameEntry } from "../games";
+import { WALL_GENRE } from "./categories";
 import { updateManifest } from "./manifest";
 import type { ClientTheme } from "../kit/theme";
 
@@ -58,8 +59,11 @@ export function Showcase({ games, brand, playable = true }: { games: GameEntry[]
   const [query, setQuery] = useState("");
   useEffect(() => { document.title = brand.name; updateManifest(brand.name, brand.name); }, [brand.name]);
 
-  const genres = useMemo(() => ["All", ...new Set(games.map((g) => g.genre))], [games]);
-  const shown = games.filter((g) =>
+  // LiDAR wall activations get their own section below; the main grid, its genre chips and search cover the rest.
+  const wall = games.filter((g) => g.genre === WALL_GENRE);
+  const touch = games.filter((g) => g.genre !== WALL_GENRE);
+  const genres = useMemo(() => ["All", ...new Set(touch.map((g) => g.genre))], [touch]);
+  const shown = touch.filter((g) =>
     (genre === "All" || g.genre === genre) &&
     (!query || `${g.name} ${g.genre} ${g.tagline}`.toLowerCase().includes(query.toLowerCase())));
   const recentGames = !playable ? [] : recent().map((id) => games.find((g) => g.id === id)).filter((g): g is GameEntry => !!g).slice(0, 6);
@@ -139,6 +143,25 @@ export function Showcase({ games, brand, playable = true }: { games: GameEntry[]
           {shown.length === 0 && <p className="site-empty">No games match.</p>}
         </div>
       </section>
+
+      {wall.length > 0 && (
+        <section className="site-section">
+          <h2>Activation games · LiDAR wall</h2>
+          <p className="site-note">Projected on a wall at events: players throw soft balls and a LiDAR sensor reads every hit. A mouse click or a tap stands in for a ball here.</p>
+          <div className="site-grid">
+            {wall.map((g) => (
+              <a key={g.id} className="site-card" href={`${brand.base}${g.id}`}>
+                <img src={g.icon} alt="" loading="lazy" width={256} height={256} />
+                <div>
+                  <h3>{g.name}</h3>
+                  <span className="site-genre">{g.genre}</span>
+                  <p>{g.tagline}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <footer className="site-foot">{brand.footer}</footer>
     </div>
