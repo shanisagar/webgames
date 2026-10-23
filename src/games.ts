@@ -22,6 +22,16 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "toprumble",
+    name: "Top Rumble",
+    tagline: "Pull the string. Last top spinning wins.",
+    genre: "Action",
+    icon: "img/icons/toprumble.webp",
+    feature: "img/features/toprumble.webp",
+    description: "Wooden spinning tops battle in a chalk ring: pull back to throw, nudge to stay in, and knock rivals out or outlast their spin. Climb an endless school-yard tour with 4-way rumbles, take the daily challenge, beat three CPU rivals, or battle a friend on one screen.",
+    component: load(() => import("./games/toprumble")),
+  },
+  {
     id: "mazemuncher",
     name: "Maze Muncher",
     tagline: "Eat the dots. Dodge the ghosts.",
