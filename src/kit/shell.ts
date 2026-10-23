@@ -199,7 +199,8 @@ export class Shell extends Behaviour {
     this.title = UIKit.layer("Title", this.safeRoot);
     const c = UIKit.node("Center", this.title.node).place(C, V2.zero, new V2(1000, 1000));
     UIKit.img(c, "LogoGlow", Art.Glow, info.Accent.withAlpha(0.16)).rectTransform.place(C, new V2(0, 330), new V2(1150, 420));
-    const size = info.Title.length > 10 ? 118 : 140;
+    // Long titles shrink to stay inside the ~1000-unit centre column on a portrait phone (bold caps run about 0.7 em).
+    const size = Math.min(info.Title.length > 10 ? 118 : 140, Math.floor(980 / (info.Title.length * 0.7)));
     this.logo = UIKit.at(UIKit.label(c, info.Title, size, Color.white), C, new V2(0, 330), new V2(1100, 190));
     this.logo.span.classList.add("na-logo");
     this.logoGlow = UIKit.glow(this.logo, info.Accent, 4);
