@@ -168,9 +168,10 @@ export const GAMES: GameEntry[] = [
     name: "Dots & Boxes",
     tagline: "Draw a line. Close a box. Go again.",
     genre: "Board",
+    online: true,
     icon: "img/icons/dotsboxes.webp",
     feature: "img/features/dotsboxes.webp",
-    description: "The notebook classic in ink and doodles: close a box to claim it and move again. Solve ink-limited puzzle stages, outplay CPUs up to a chain-strategy master, or face a friend across the table on three board sizes.",
+    description: "The notebook classic in ink and doodles: close a box to claim it and move again. Solve ink-limited puzzle stages, outplay CPUs up to a chain-strategy master, or face a friend across the table on three board sizes. Play online at a private table: share a 5-digit code and play from two phones.",
     component: load(() => import("./games/dotsboxes")),
   },
   {
