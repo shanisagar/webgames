@@ -608,7 +608,7 @@ export class WallBombsGame extends ArcadeGame {
         bm.burst.transform.localScale = new V3(s, s, 1);
         bm.burst.transform.localEulerZ = k * 30;
         bm.burst.color = Color.white.withAlpha(k > 0.75 ? (1 - k) / 0.25 : 1);
-        bm.text.characterSize = (bm.size * 0.4 * 10 / 64) * (k < 0.12 ? k / 0.12 : 1);
+        bm.text.characterSize = (bm.size * 0.3 * 10 / 64) * (k < 0.12 ? k / 0.12 : 1);
         bm.text.color = Ink.withAlpha(k > 0.75 ? (1 - k) / 0.25 : 1);
       } else {
         bm.burst.gameObject.setActive(false);
