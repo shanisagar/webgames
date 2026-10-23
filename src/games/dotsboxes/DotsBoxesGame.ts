@@ -1,7 +1,10 @@
 import {
   AdService, ArcadeButton, ArcadeGame, Art, AudioClip, CasualArt, CasualFx, CasualLook, Color, Ease, Fmt, Fx, GameInfo, GameObject, howTo, Image,
-  Mathf, Mouse, overUI, Pal, Phase, Random, Result, Screen, Sfx, Snd, SpriteRenderer, TapPointer, Text, TextAnchor, Time, TouchScheme, UIKit, UINode, V2, V3,
+  Mathf, Mouse, OnlineRoom, overUI, Pal, Phase, Random, Result, Screen, Sfx, Snd, SpriteRenderer, tableCodeFromUrl, TapPointer, Text, TextAnchor, Time,
+  TouchScheme, UIKit, UINode, V2, V3,
 } from "../../kit";
+import { OnlineLink } from "./OnlineLink";
+import { TableLobby, TableOverlay } from "./OnlineUI";
 import { CoinSprite, DotSprite, DoodleCount, DoodleSprite, Gold, HatchSprite, InkDrop, Panel, Papers, PaperSprite, SheetShadow, StrokeSprite } from "./DotsArt";
 import { Board, DotsBot, makePuzzle, Puzzle } from "./DotsEngine";
 
@@ -14,11 +17,18 @@ import { Board, DotsBot, makePuzzle, Puzzle } from "./DotsEngine";
  * ink (lines that close a box are free). A rewarded ad takes back a move once per game; coins unlock paper styles.
  */
 
-enum Mode { Solo, Cpu, Duo }
-const ModeNames = ["SOLO", "VS CPU", "2 PLAYERS"];
+enum Mode { Solo, Cpu, Duo, Online }
+const ModeNames = ["SOLO", "VS CPU", "2 PLAYERS", "ONLINE"];
+/** Online: the guest's pen (the host draws in the paper's first pen colour). */
+const GuestPink = Pal.hex(0xff4fa0);
+const OnlinePrize = 60;
+/** Online match payloads: board size and who moves first (0 = host, 1 = guest); a snapshot replays the moves. */
+interface OStart { size: number; first: number }
+interface OSnap { size: number; first: number; moves: number[] }
 const DiffNames = ["EASY", "MEDIUM", "HARD"];
 const Sizes = [4, 5, 6];
 const Prizes = [20, 50, 100];
+const ModeAccents = [Pal.hex(0x5ce07a), Pal.hex(0x3a9cff), Pal.hex(0xff7a4a), Pal.hex(0xff4fa0)];
 
 class Edge { sr!: SpriteRenderer; t = 9; owner = -1; pre = false; }
 class Box { hatch!: SpriteRenderer; doodle!: SpriteRenderer; t = 9; owner = -1; kind = 0; flip = false; }
@@ -44,6 +54,10 @@ export class DotsBoxesGame extends ArcadeGame {
   private humanMoves = 0; private lastGot = 0; private chainCount = 0;
   private portrait = true;
   private attractT = 0; private attractBot = new DotsBot(1);
+  // online
+  private lobby!: TableLobby; private overlay!: TableOverlay;
+  private link: OnlineLink<OStart, number, OSnap> | null = null;
+  private me = 0; private onlineStart: OStart = { size: 5, first: 0 }; private onlineGo = false; private autoJoined = false; private forfeit = false;
 
   // HUD
   private panels: PanelUI[] = [];
@@ -95,7 +109,7 @@ export class DotsBoxesGame extends ArcadeGame {
   private get Coins() { return this.Data.get("coins"); }
   private set Coins(v: number) { this.Data.set("coins", Math.max(0, Math.round(v))); }
   private get Paper() { return Mathf.clamp(this.Data.get("paper"), 0, Papers.length - 1); }
-  private get Pens() { return Papers[this.Paper].pens; }
+  private get Pens(): [Color, Color] { const p = Papers[this.Paper].pens; return this.mode === Mode.Online ? [p[0], GuestPink] : p; }
   protected BestLine() { return `PUZZLE STAGE ${this.Data.get("stage", 1)}   ·   COINS ${Fmt.n(this.Coins)}`; }
   protected StatsLine() { return ""; }
 
@@ -122,6 +136,7 @@ export class DotsBoxesGame extends ArcadeGame {
     this.ghost = Art.spr(this.board, "Ghost", StrokeSprite(), new Color(1, 1, 1, 0), 1, 9, Art.Flat);
     this.fx = CasualFx.create(this.board, 40, 200);
     this.BuildHud();
+    this.BuildOnline();
     this.BuildTitle();
     this.BuildSounds();
     this.NewBoard(5);
@@ -150,7 +165,8 @@ export class DotsBoxesGame extends ArcadeGame {
       p.swatch.rectTransform.place(new V2(0, 0.5), new V2(75, 0), new V2(90, 90));
       p.name = UIKit.at(UIKit.label(p.node, "", 28, Color.white, TextAnchor.MiddleLeft), new V2(0, 0.5), new V2(275, 30), new V2(270, 36));
       p.score = UIKit.at(UIKit.label(p.node, "0", 62, Color.white, TextAnchor.MiddleLeft), new V2(0, 0.5), new V2(275, -18), new V2(270, 70));
-      p.turn = UIKit.at(UIKit.label(p.node, "", 30, Color.white), new V2(1, 0.5), new V2(-110, 0), new V2(200, 40));
+      p.turn = UIKit.at(UIKit.label(p.node, "", 26, Color.white), new V2(1, 0.5), new V2(-105, 0), new V2(200, 40));
+      CasualLook.fit(p.turn, 16);
       this.panels.push(p);
     }
     this.soloBar = UIKit.node("SoloBar", hud).place(new V2(0.5, 1), new V2(-60, -100), new V2(860, 170));
@@ -172,10 +188,10 @@ export class DotsBoxesGame extends ArcadeGame {
     const ex = this.UI.TitleExtra;
     if (!ex) return;
     CasualLook.titleCard(this.UI, new Color(0.08, 0.1, 0.2, 0.8), new V2(1060, 1100), -30);
-    const accents = [Pal.hex(0x5ce07a), Pal.hex(0x3a9cff), Pal.hex(0xff7a4a)];
-    for (let i = 0; i < 3; i++) {
+    const accents = ModeAccents;
+    for (let i = 0; i < 4; i++) {
       const idx = i;
-      const b = UIKit.buttonAt(ex, ModeNames[i], UIKit.Center, new V2((i - 1) * 320, 20), new V2(300, 96), false, () => { this.Data.set("mode", idx); this.RefreshTitle(); }, 32);
+      const b = UIKit.buttonAt(ex, ModeNames[i], UIKit.Center, new V2((i - 1.5) * 245, 20), new V2(232, 96), false, () => { this.Data.set("mode", idx); this.RefreshTitle(); }, 28);
       b.setAccent(accents[i]);
       this.modeButtons.push(b);
     }
@@ -207,7 +223,7 @@ export class DotsBoxesGame extends ArcadeGame {
     this.shop.setActive(false);
   }
 
-  private get SelMode() { return Mathf.clamp(this.Data.get("mode", 1), 0, 2) as Mode; }
+  private get SelMode() { return Mathf.clamp(this.Data.get("mode", 1), 0, 3) as Mode; }
 
   private CycleOption() {
     const m = this.SelMode;
@@ -220,15 +236,15 @@ export class DotsBoxesGame extends ArcadeGame {
   private RefreshTitle() {
     if (!this.optButton) return;
     const m = this.SelMode, d = Mathf.clamp(this.Data.get("diff", 1), 0, 2), lay = this.Data.get("layout"), sz = Sizes[Mathf.clamp(this.Data.get("size", 1), 0, 2)];
-    const accents = [Pal.hex(0x5ce07a), Pal.hex(0x3a9cff), Pal.hex(0xff7a4a)];
+    const accents = ModeAccents;
     this.modeButtons.forEach((b, i) => {
       b.setAccent(i === m ? accents[i] : new Color(1, 1, 1, 0.45));
       if (b.label) b.label.text = (i === m ? "● " : "") + ModeNames[i];
     });
     const stage = this.Data.get("stage", 1);
-    if (this.optButton.label) this.optButton.label.text = m === Mode.Solo ? `STAGE ${stage}` : m === Mode.Cpu ? `CPU: ${DiffNames[d]}` : lay === 0 ? "LAYOUT: TABLE" : "SAME SIDE";
+    if (this.optButton.label) this.optButton.label.text = m === Mode.Solo ? `STAGE ${stage}` : m === Mode.Cpu ? `CPU: ${DiffNames[d]}` : m === Mode.Online ? "PRIVATE TABLE" : lay === 0 ? "LAYOUT: TABLE" : "SAME SIDE";
     this.optButton.setAccent(accents[m]);
-    this.optButton.interactable = m !== Mode.Solo;
+    this.optButton.interactable = m === Mode.Cpu || m === Mode.Duo;
     if (this.sizeButton.label) this.sizeButton.label.text = m === Mode.Solo ? "PUZZLE" : `BOARD ${sz}×${sz}`;
     this.sizeButton.interactable = m !== Mode.Solo;
     this.sizeButton.setAccent(Pal.hex(0x9a7aff));
@@ -236,6 +252,7 @@ export class DotsBoxesGame extends ArcadeGame {
     if (this.shopButton.label) this.shopButton.label.fontSize = 22;
     this.modeLabel.text = m === Mode.Solo ? `STAGE ${stage}: CLAIM THE GOAL WITH YOUR INK · ${"★".repeat(this.Data.get("s" + (stage - 1)))}`
       : m === Mode.Cpu ? `MOST BOXES WINS · BEAT THE ${DiffNames[d]} CPU FOR ${this.PrizeFor(d, sz)} COINS`
+      : m === Mode.Online ? `PLAY A FRIEND ON THEIR OWN PHONE · WIN ${OnlinePrize} COINS`
       : lay === 0 ? "FACE TO FACE: PLAYER 2 SITS ACROSS THE TABLE" : "SIDE BY SIDE: TAKE TURNS ON ONE BOARD";
     this.UI.ShowTitle(this.BestLine(), this.StatsLine());
   }
@@ -277,7 +294,7 @@ export class DotsBoxesGame extends ArcadeGame {
     for (const d of this.dots) d.color = st.dot;
     this.RepaintAll();
     for (let i = 0; i < 2; i++) {
-      const p = this.panels[i], pen = st.pens[i];
+      const p = this.panels[i], pen = this.Pens[i];
       p.bg.color = Color.lerp(st.paper, Color.white, 0.3).withAlpha(0.95);
       p.name.color = pen; p.score.color = st.ink; p.turn.color = pen; p.swatch.color = pen;
     }
@@ -326,12 +343,12 @@ export class DotsBoxesGame extends ArcadeGame {
     for (let e = 0; e < this.bd.E && e < this.edges.length; e++) {
       const ed = this.edges[e];
       if (!ed.sr.gameObject.activeSelf) continue;
-      ed.sr.color = ed.pre ? st.pencil.withAlpha(0.85) : st.pens[Math.max(0, ed.owner)];
+      ed.sr.color = ed.pre ? st.pencil.withAlpha(0.85) : this.Pens[Math.max(0, Math.min(1, ed.owner))];
     }
     for (let b = 0; b < this.n * this.n; b++) {
       const bx = this.boxes[b];
       if (bx.owner < 0) continue;
-      const pen = st.pens[Math.min(1, bx.owner)];
+      const pen = this.Pens[Math.min(1, bx.owner)];
       bx.hatch.color = pen.withAlpha(0.55);
       bx.doodle.color = pen;
     }
@@ -378,6 +395,7 @@ export class DotsBoxesGame extends ArcadeGame {
   private LayoutHud() {
     const duel = this.Playing && this.mode !== Mode.Solo;
     this.soloBar.setActive(this.Playing && this.mode === Mode.Solo);
+    const bottom = this.mode === Mode.Online ? this.me : 0;
     for (let i = 0; i < 2; i++) {
       const p = this.panels[i];
       p.node.setActive(duel);
@@ -386,15 +404,19 @@ export class DotsBoxesGame extends ArcadeGame {
       let size = new V2(500, 150);
       if (!this.portrait) {
         if (this.Table) { anchor = new V2(i === 0 ? 0 : 1, 0.5); pos = new V2(i === 0 ? 150 : -150, 0); rot = i === 0 ? -90 : 90; }
-        else { anchor = new V2(0, i === 0 ? 0 : 1); pos = new V2(290, i === 0 ? 110 : -110); }
+        else { anchor = new V2(0, i === bottom ? 0 : 1); pos = new V2(290, i === bottom ? 110 : -110); }
       } else if (this.mode === Mode.Duo && !this.table) {
         anchor = new V2(0.5, 0); pos = new V2((i === 0 ? -1 : 1) * 265, 110); size = new V2(500, 150);
-      } else if (i === 0) { anchor = new V2(0.5, 0); pos = new V2(0, 110); }
+      } else if (i === bottom) { anchor = new V2(0.5, 0); pos = new V2(0, 110); }
       else { anchor = new V2(0.5, 1); pos = new V2(-60, -110); rot = this.Table ? 180 : 0; }
       p.node.place(anchor, pos, size);
       p.node.localEulerAngles = new V3(0, 0, rot);
     }
-    const showUndo = this.Playing && this.mode !== Mode.Duo;
+    const showUndo = this.Playing && this.mode !== Mode.Duo && this.mode !== Mode.Online;
+    const online = this.Playing && this.mode === Mode.Online;
+    this.overlay.showBar(online);
+    if (this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 255) }, { anchor: new V2(0.5, 1), pos: new V2(0, -270) });
+    else this.overlay.place({ anchor: new V2(0, 0), pos: new V2(290, 255) }, { anchor: new V2(0, 1), pos: new V2(290, -260) });
     this.undoButton.node.setActive(showUndo);
     if (this.portrait) this.undoButton.node.place(new V2(1, 0), new V2(-150, this.mode === Mode.Solo ? 110 : 300), new V2(240, 84));
     else this.undoButton.node.place(new V2(1, 0), new V2(-170, 80), new V2(260, 84));
@@ -407,6 +429,7 @@ export class DotsBoxesGame extends ArcadeGame {
   // ------------------------------------------------------------------ lifecycle
 
   protected OnEnterTitle() {
+    this.LeaveTable();
     this.mode = Mode.Cpu;
     this.shop?.setActive(false);
     this.NewBoard(5);
@@ -414,10 +437,19 @@ export class DotsBoxesGame extends ArcadeGame {
     this.Layout();
     this.attractT = 0.6; this.turn = 0;
     this.RefreshTitle();
+    // an invite link (?table=12345) opens the join panel and joins straight away
+    const code = tableCodeFromUrl();
+    if (code && !this.autoJoined) {
+      this.autoJoined = true;
+      this.Data.set("mode", Mode.Online);
+      this.RefreshTitle();
+      this.lobby.open("join", code);
+    }
   }
 
   protected BeginRun() {
     this.mode = this.SelMode;
+    if (this.mode !== Mode.Online) this.me = 0;
     this.diff = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
     this.table = this.Data.get("layout") === 0;
     this.bot = new DotsBot(this.diff);
@@ -439,6 +471,12 @@ export class DotsBoxesGame extends ArcadeGame {
       }
       this.ink = this.puzzle.ink; this.inkUsed = 0;
       this.turn = 0;
+    } else if (this.mode === Mode.Online) {
+      this.puzzle = null;
+      this.me = this.link ? this.link.me : 0;
+      this.forfeit = false;
+      this.NewBoard(this.onlineStart.size);
+      this.turn = this.onlineStart.first;
     } else {
       this.puzzle = null;
       this.NewBoard(Sizes[Mathf.clamp(this.Data.get("size", 1), 0, 2)]);
@@ -455,11 +493,13 @@ export class DotsBoxesGame extends ArcadeGame {
     for (let i = 0; i < 2; i++) this.panels[i].name.text = names[i];
     if (this.mode === Mode.Solo) this.UI.Toast(`Claim ${this.puzzle!.goal} boxes with ${this.ink} lines of ink. Closing a box is free!`, 4);
     else if (this.Data.get("games") <= 1) this.UI.Toast("Tap between two dots to draw a line. Close a box to go again!", 4);
-    this.UI.Announce(this.mode === Mode.Solo ? `STAGE ${this.stage}` : `${names[this.turn]} START${this.turn === 0 && this.mode === Mode.Cpu ? "" : "S"}`, Gold, 1.3);
+    const youStart = (this.mode === Mode.Cpu && this.turn === 0) || (this.mode === Mode.Online && this.turn === this.me);
+    this.UI.Announce(this.mode === Mode.Solo ? `STAGE ${this.stage}` : youStart ? "YOU START" : `${names[this.turn]} STARTS`, Gold, 1.3);
     this.UpdateHud(0);
   }
 
   private Names() {
+    if (this.mode === Mode.Online) return this.me === 0 ? ["YOU", "FRIEND"] : ["FRIEND", "YOU"];
     if (this.mode === Mode.Cpu) return ["YOU", `CPU · ${DiffNames[this.diff]}`];
     if (this.mode === Mode.Solo) return ["YOU", ""];
     return ["PLAYER 1", "PLAYER 2"];
@@ -469,6 +509,8 @@ export class DotsBoxesGame extends ArcadeGame {
 
   protected TickBackground(dt: number) {
     if (this.relayout > 0 && --this.relayout === 0) this.Layout();
+    this.lobby.tick(Time.unscaledDeltaTime);
+    this.overlay.tick();
     if (this.State === Phase.Title) {
       // attract: two bots doodle away behind the title
       this.attractT -= dt;
@@ -486,10 +528,12 @@ export class DotsBoxesGame extends ArcadeGame {
 
   protected TickRun(dt: number) {
     if (this.relayout > 0 && --this.relayout === 0) this.Layout();
+    this.overlay.tick();
     this.busy = Math.max(0, this.busy - dt);
     if (!this.ended) {
       this.clock += dt;
       if (this.IsHumanTurn) this.ReadInput();
+      else if (this.mode === Mode.Online) this.ShowGhost(-1);
       else if (this.mode === Mode.Cpu && this.busy <= 0) {
         this.botT -= dt;
         if (this.botT <= 0) {
@@ -506,7 +550,10 @@ export class DotsBoxesGame extends ArcadeGame {
     this.UpdateHud(dt);
   }
 
-  private get IsHumanTurn() { return this.mode !== Mode.Cpu || this.turn === 0; }
+  private get IsHumanTurn() {
+    if (this.mode === Mode.Online) return this.turn === this.me && !!this.link && this.link.connected && !this.overlay.busy;
+    return this.mode !== Mode.Cpu || this.turn === 0;
+  }
 
   // ------------------------------------------------------------------ input
 
@@ -560,6 +607,7 @@ export class DotsBoxesGame extends ArcadeGame {
     }
     this.humanMoves++;
     this.Apply(e, this.turn, false);
+    if (this.mode === Mode.Online) this.link?.sendMove(e);
   }
 
   // ------------------------------------------------------------------ moves
@@ -622,7 +670,7 @@ export class DotsBoxesGame extends ArcadeGame {
       else if (this.bd.score[0] >= total) this.EndGame(true);
       return;
     }
-    if (this.bd.score[0] + this.bd.score[1] >= total) this.EndGame(this.bd.score[0] > this.bd.score[1]);
+    if (this.bd.score[0] + this.bd.score[1] >= total) this.EndGame(this.bd.score[this.me] > this.bd.score[1 - this.me]);
     else if (this.bd.score[0] * 2 > total && this.mode === Mode.Cpu) { /* keep playing to the end: the board fills fast */ }
   }
 
@@ -634,6 +682,7 @@ export class DotsBoxesGame extends ArcadeGame {
     let head: string, good = win;
     if (this.mode === Mode.Solo) head = win ? "STAGE CLEAR!" : "OUT OF INK";
     else if (this.mode === Mode.Cpu) head = s[0] > s[1] ? "YOU WIN!" : s[0] === s[1] ? "DRAW!" : "CPU WINS";
+    else if (this.mode === Mode.Online) { const a = s[this.me], b = s[1 - this.me]; head = a > b ? "YOU WIN!" : a === b ? "DRAW!" : "FRIEND WINS"; good = a >= b; }
     else { head = s[0] === s[1] ? "DRAW!" : `${this.Names()[s[0] > s[1] ? 0 : 1]} WINS!`; good = true; }
     this.UI.Announce(head, good ? Gold : Pal.hex(0xff5a5a), 1.6);
     Sfx.play(good ? Snd.Win : Snd.Lose, 0.8);
@@ -686,9 +735,9 @@ export class DotsBoxesGame extends ArcadeGame {
         const s = 1 + 0.3 * Ease.outCubic(p.pop);
         p.score.rectTransform.localScale = new V3(s, s, 1);
         const mine = this.turn === i && !this.ended;
-        p.turn.text = mine ? (this.mode === Mode.Cpu && i === 1 ? "THINKING…" : "YOUR TURN") : "";
+        p.turn.text = !mine ? "" : this.mode === Mode.Online ? (i === this.me ? "YOUR TURN" : "FRIEND'S TURN") : this.mode === Mode.Cpu && i === 1 ? "THINKING…" : "YOUR TURN";
         p.turn.rectTransform.localScale = new V3(1 + 0.05 * Math.sin(Time.time * 6), 1 + 0.05 * Math.sin(Time.time * 6), 1);
-        p.edge.color = st.pens[i].withAlpha(0.3 + 0.6 * p.glow);
+        p.edge.color = this.Pens[i].withAlpha(0.3 + 0.6 * p.glow);
         p.node.localScale = new V3(1 + 0.04 * p.glow, 1 + 0.04 * p.glow, 1);
       }
     }
@@ -731,10 +780,152 @@ export class DotsBoxesGame extends ArcadeGame {
     Sfx.play(Snd.Whoosh, 0.6);
   }
 
+
+  // ------------------------------------------------------------------ online (private tables)
+
+  private BuildOnline() {
+    const theme = { accent: Pal.hex(0x3a9cff), accent2: GuestPink, ink: Papers[0].ink };
+    this.lobby = new TableLobby("dotsboxes", theme, {
+      onReady: (room) => this.OnTableReady(room),
+      toast: (t, sec) => this.UI.Toast(t, sec ?? 2),
+    }, "Dots & Boxes");
+    this.overlay = new TableOverlay(theme, () => { this.overlay.hide(); this.EnterTitle(); }, (k) => this.link?.react(k));
+    this.overlay.onTimeout = () => { this.link?.leave(); this.FriendLeft(); };
+  }
+
+  /** PLAY with ONLINE selected opens the lobby; REMATCH online asks the friend. */
+  protected StartRun() {
+    if (this.State === Phase.Paused && this.mode === Mode.Online) { this.UI.Toast("Restart isn't available online: use MENU to leave the table.", 2.5); return; }
+    if (this.SelMode === Mode.Online && !this.onlineGo) {
+      if (this.State === Phase.Over && this.link && this.link.connected) { this.AskRematch(); return; }
+      if (this.State === Phase.Over) { this.EnterTitle(); }
+      if (!this.lobby.isOpen) {
+        const sz = Sizes[Mathf.clamp(this.Data.get("size", 1), 0, 2)];
+        this.lobby.createNote = `Your table plays on a ${sz}×${sz} board (change it on the title screen).`;
+        this.lobby.open("menu");
+      }
+      return;
+    }
+    this.onlineGo = false;
+    super.StartRun();
+  }
+
+  private OnTableReady(room: OnlineRoom) {
+    this.LeaveTable();
+    const link = new OnlineLink<OStart, number, OSnap>(room);
+    this.link = link;
+    link.bind({
+      onStart: (st) => {
+        this.onlineStart = st;
+        this.overlay.hide();
+        this.Data.set("mode", Mode.Online);
+        this.onlineGo = true;
+        this.StartRun();
+      },
+      validMove: (e, by) => this.State === Phase.Playing && !this.ended && by === this.turn && e >= 0 && e < this.bd.E && !this.bd.drawn[e],
+      onMove: (e, by) => this.Apply(e, by, false),
+      snapshot: () => ({ size: this.n, first: this.onlineStart.first, moves: this.bd.moves.map((m) => m.e) }),
+      onSnapshot: (snap) => {
+        if (this.State === Phase.Playing && this.mode === Mode.Online) { this.Rebuild(snap); return; }
+        if (this.State === Phase.Playing) return;
+        // joined (again) in the middle of a match: start from the host's state
+        this.onlineStart = { size: snap.size, first: snap.first };
+        this.overlay.hide();
+        this.Data.set("mode", Mode.Online);
+        this.onlineGo = true;
+        this.StartRun();
+        this.Rebuild(snap);
+      },
+      onReaction: (k) => this.overlay.Pop(k, true),
+      onFriend: (st) => {
+        if (st === "connected") { if (this.overlay.state === "lost") { this.overlay.hide(); this.UI.Toast("Your friend is back!", 2); } }
+        else if (st === "lost") { if (this.State === Phase.Playing && !this.ended) this.overlay.lost(30); }
+        else this.FriendLeft();
+      },
+      onRematchReady: () => { if (link.isHost) link.start({ size: this.n, first: link.match % 2 }); },
+      onFriendRematch: () => { if (this.overlay.state !== "rematch") this.UI.Toast("Your friend wants a rematch! Tap REMATCH.", 3); },
+    });
+    if (link.isHost) {
+      const sz = Sizes[Mathf.clamp(this.Data.get("size", 1), 0, 2)];
+      link.start({ size: sz, first: 0 });
+    } else this.UI.Toast("Joined! Waiting for the host to start…", 3);
+  }
+
+  /** The host's snapshot replaces the local board (after a reconnect or an out-of-order move). */
+  private Rebuild(snap: OSnap) {
+    this.onlineStart = { size: snap.size, first: snap.first };
+    this.NewBoard(snap.size);
+    this.ApplyPaper();
+    this.turn = snap.first;
+    for (const e of snap.moves) this.Apply(e, this.turn, true);
+    this.ended = false;
+    this.Layout();
+    this.CheckEnd();
+  }
+
+  private AskRematch() {
+    if (!this.link) return;
+    this.overlay.waitingRematch();
+    this.link.askRematch();
+  }
+
+  /** The friend left on purpose or never came back. */
+  private FriendLeft() {
+    const link = this.link;
+    this.link = null;
+    if (link && link.room.status !== "closed") link.room.close();
+    if (this.State === Phase.Playing && this.mode === Mode.Online && !this.ended) {
+      const total = this.n * this.n, claimed = this.bd.score[0] + this.bd.score[1];
+      if (claimed * 2 > total) {
+        // most of the board is decided: the player who stayed takes the win
+        this.forfeit = true;
+        this.overlay.hide();
+        this.ended = true;
+        this.endT = 0.2;
+        this.UI.Announce("YOUR FRIEND LEFT", Gold, 1.4);
+        return;
+      }
+      this.ended = true;
+      this.endT = 1e9; // no result screen: the overlay's MENU leaves
+      this.overlay.left("Your friend left", "Not enough of the board was played for a result.");
+      return;
+    }
+    if (this.State === Phase.Over || this.overlay.state === "rematch") this.overlay.left("Your friend left", "No rematch this time.");
+  }
+
+  /** Leaving (menu, title): the friend is told and the room closes. */
+  private LeaveTable() {
+    if (this.link) { this.link.leave(); this.link = null; }
+    this.overlay?.hide();
+    this.overlay?.showBar(false);
+  }
+
+  private OnlineResult() {
+    const s = this.bd.score, a = s[this.me], b = s[1 - this.me];
+    const won = this.forfeit || a > b, draw = !this.forfeit && a === b;
+    const prize = won ? OnlinePrize : draw ? 15 : 5;
+    this.lastPrize = prize;
+    this.Coins = this.Coins + prize;
+    if (won) this.Data.add("onlineWins", 1);
+    this.Data.add("onlineGames", 1);
+    this.overlay.showBar(false);
+    this.Finish(new Result({
+      Headline: this.forfeit ? "FRIEND LEFT · YOU WIN!" : won ? "YOU WIN!" : draw ? "IT'S A DRAW" : "FRIEND WINS",
+      HeadlineColor: won ? Gold : this.Pens[1 - this.me], Victory: won,
+      Value: `${a} – ${b}`,
+      BestLine: `YOU ${a} · FRIEND ${b}   ·   +${prize} COINS`,
+      Stats: [["YOUR BOXES", String(a)], ["FRIEND'S BOXES", String(b)], ["MATCH", String(this.link?.match ?? 1)], ["ONLINE WINS", String(this.Data.get("onlineWins"))]],
+      Primary: this.link ? "REMATCH" : "NEW TABLE",
+      Reward: won ? () => this.DoubleCoins() : null,
+      RewardLabel: `DOUBLE COINS: +${prize} (AD)`,
+    }));
+  }
+
   // ------------------------------------------------------------------ results
 
   private ShowResult() {
     const s = this.bd.score;
+    if (this.mode === Mode.Online) { this.OnlineResult(); return; }
     if (this.mode === Mode.Solo) {
       const pz = this.puzzle!;
       const win = s[0] >= pz.goal;
