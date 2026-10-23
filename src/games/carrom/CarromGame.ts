@@ -429,7 +429,7 @@ export class CarromGame extends ArcadeGame {
     this.rules = Mathf.clamp(this.Data.get("rules"), 0, 1);
     this.diff = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
     this.Data.add("games", 1);
-    this.ended = false; this.forfeit = false; this.pendingSnap = null; this.shotN = 0; this.waitT = 0;
+    this.ended = false; this.forfeit = false; this.pendingSnap = null; this.shotN = 0; this.waitT = 0; this.latestApplied = false;
     if (this.mode === Online) { this.me = this.link ? this.link.me : 0; this.rules = this.onlineStart.rules; this.proMatch = false; }
     else this.me = 0;
     this.board = new Board(this.rules, this.mode === 0 ? 1 : 2);
@@ -745,6 +745,7 @@ export class CarromGame extends ArcadeGame {
     if (this.mode === Online) this.link?.pushState();
   }
   private lastOut: OOut | null = null;
+  private latestApplied = false;
 
   private AnnounceOutcome(o: OOut) {
     if (o.foul) {
@@ -1141,8 +1142,13 @@ export class CarromGame extends ArcadeGame {
     if (snap.rolling && snap.n <= this.shotN) return; // the host is mid-shot: its settled board follows
     if ((this.step === Step.Rolling || this.step === Step.Settle) && snap.n > this.shotN) { this.pendingSnap = snap; return; }
     if (this.step === Step.Rolling && snap.n === this.shotN) return;
+    // a repeat of the board I already show (reconnect pings, duplicates): don't disturb my aim
+    if (snap.n === this.shotN && this.step !== Step.Wait && snap.b.turn === this.board.turn && !snap.b.over && this.latestApplied
+      && snap.b.strikes === this.board.strikes && this.OnCount(snap) === Board.coinsLeft(this.sim) + this.sim.on[Striker]) return;
     this.ApplySnap(snap);
   }
+
+  private OnCount(snap: OSnap) { let n = 0; for (let i = 0; i < N; i++) n += snap.d[i * 4]; return n; }
 
   private ApplySnap(snap: OSnap) {
     const s = this.sim, b = this.board;
@@ -1172,6 +1178,7 @@ export class CarromGame extends ArcadeGame {
       for (const n of snap.out.ret) { this.views[n].pop = 1; this.fx.pop(new V2(s.x[n], s.y[n]), Gold, 10, 2, 0.18, 0.4); }
     }
     this.shotN = snap.n;
+    this.latestApplied = true;
     this.UpdateHud();
     if (b.over) { this.EndMatch(); return; }
     this.BeginTurn();
