@@ -41,3 +41,20 @@ domain per client.
 ## Offline play
 The site installs a service worker (`public/sw.js`): the lobby and every game a player has opened before keep
 working without a connection, and repeat visits start instantly. New deploys are picked up on the next page load.
+
+## Private dev preview (Cloudflare Access)
+
+The dev preview (the `dev` branch) is built on every deploy. Without Cloudflare it is published at `<site>/dev/`
+behind the admin login screen, but its files stay public. With Cloudflare it moves to its own Pages project and can
+be made truly private:
+
+1. Add the repository secrets `CLOUDFLARE_API_TOKEN` (token with **Cloudflare Pages: Edit**) and
+   `CLOUDFLARE_ACCOUNT_ID`. The next deploy publishes the dev preview to the Pages project `webgames-dev`
+   (`https://webgames-dev.pages.dev`; set the repository variable `CLOUDFLARE_DEV_PROJECT` for another name) and stops
+   publishing `/dev/` on GitHub Pages. The live site also deploys to the `webgames` project.
+2. Cloudflare dashboard → **Zero Trust** (free up to 50 users) → **Access → Applications → Add an application →
+   Self-hosted**: domain `webgames-dev.pages.dev`, policy **Allow** for your email addresses (login by one-time PIN
+   e-mail). Add a second application for `*.webgames-dev.pages.dev` so preview links are covered too.
+3. Optional: make the GitHub repository private. GitHub Pages on a private repository needs a paid GitHub plan; on the
+   free plan, serve the live site from Cloudflare Pages instead (its address becomes `https://webgames.pages.dev` or
+   your own domain), so update any links you have shared.
