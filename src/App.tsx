@@ -9,8 +9,12 @@ import { GameFrame, Notice, Portal } from "./platform/Portal";
 import { Showcase, STUDIO } from "./platform/Showcase";
 import { gamesOff } from "./platform/store";
 
-/** Development only: #/dev/<folder> opens any game folder (src/games/<folder>/index.tsx), registered or not. */
-const devGames = import.meta.env.DEV ? import.meta.glob<{ default: ComponentType }>("./games/*/index.tsx") : {};
+/**
+ * Development and the dev preview site (built with VITE_DEV_PREVIEW=1): #/dev lists every game folder and
+ * #/dev/<folder> opens one (src/games/<folder>/index.tsx), registered or not.
+ */
+const DEV_PREVIEW = import.meta.env.DEV || import.meta.env.VITE_DEV_PREVIEW === "1";
+const devGames = DEV_PREVIEW ? import.meta.glob<{ default: ComponentType }>("./games/*/index.tsx") : {};
 
 /** The back office is its own chunk (it pulls in the Supabase SDK). */
 const Admin = lazy(() => import("./platform/admin/Admin"));
@@ -47,6 +51,7 @@ export default function App() {
   const devLoader = route.startsWith("dev/") ? devGames[`./games/${route.slice(4)}/index.tsx`] : undefined;
   const DevGame = useMemo(() => (devLoader ? lazy(devLoader) : null), [devLoader]);
   if (DevGame) return <Suspense fallback={<div className="loading">Loading…</div>}><DevGame /></Suspense>;
+  if (route === "dev" && DEV_PREVIEW) return <DevIndex />;
 
   const parts = route.split("/");
   if (parts[0] === "embed" && parts[1]) {
@@ -80,4 +85,28 @@ function Studio({ id }: { id: string }) {
   if (!game) return <Notice title="Game not found" text={`There is no game called "${id}".`} />;
   if (ONLY_GAME) return <GameFrame game={game} back="#/" />;
   return <GameDetail game={game} games={games} />;
+}
+
+/** #/dev: every game folder, with the ones not yet in the catalogue first. */
+function DevIndex() {
+  const folders = Object.keys(devGames).map((k) => k.split("/")[2]);
+  const isNew = (id: string) => !GAMES.some((g) => g.id === id);
+  const sorted = [...folders.filter(isNew), ...folders.filter((id) => !isNew(id))];
+  return (
+    <div className="devindex">
+      <h1>Dev preview</h1>
+      <p>Work in progress from the dev branch. Games marked NEW are not in the catalogue yet.</p>
+      <ul>
+        {sorted.map((id) => (
+          <li key={id}>
+            <a href={`#/dev/${id}`}>
+              <img src={`img/icons/${id}.webp`} alt="" width={56} height={56} onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+              <span>{GAMES.find((g) => g.id === id)?.name ?? id}</span>
+              {isNew(id) && <em>NEW</em>}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
