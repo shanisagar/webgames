@@ -22,6 +22,26 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "carrom",
+    name: "Carrom Flick",
+    tagline: "Flick the striker. Pocket your coins.",
+    genre: "Board",
+    icon: "img/icons/carrom.webp",
+    feature: "img/features/carrom.webp",
+    description: "Classic carrom on a real-proportion board: slide the striker, pull back and flick to pocket your coins and cover the queen. Clear the board solo, beat three CPU rivals, race the 2-minute freestyle, or play a friend face to face.",
+    component: load(() => import("./games/carrom")),
+  },
+  {
+    id: "airhockey",
+    name: "Air Hockey",
+    tagline: "Flick the puck into their goal.",
+    genre: "Sports",
+    icon: "img/icons/airhockey.webp",
+    feature: "img/features/airhockey.webp",
+    description: "Fast neon air hockey with real puck physics. Beat three CPU levels to 7, face a friend on the same screen with a finger each, or score as many goals as you can past sliding blockers in 90 seconds.",
+    component: load(() => import("./games/airhockey")),
+  },
+  {
     id: "towerconquest",
     name: "Tower Conquest",
     tagline: "Send troops. Capture towers. Grow your empire.",
