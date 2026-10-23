@@ -590,7 +590,7 @@ export abstract class WallGame extends ArcadeGame {
     const { result, score, label, stars } = this.MakeResult();
     this.starCount = stars; this.starT = 0; this.starPlayed = 0;
     result.Stars = -1;
-    this.resRank = WallBoard.add(this.Info.Id, score, label);
+    this.resRank = score > 0 ? WallBoard.add(this.Info.Id, score, label) : 0;
     if (this.resRank > 0) {
       result.BestLine = `${result.BestLine}   ·   #${this.resRank} TODAY`;
     }

@@ -22,6 +22,36 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "wallhoops",
+    name: "Hoop Shootout",
+    tagline: "Throw it in the moving hoop!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallhoops.webp",
+    feature: "img/features/wallhoops.webp",
+    description: "LiDAR wall activation: the fair arcade basketball machine on a wall. Throw soft balls through a hoop that slides and bobs, hit the golden brand hoop for 3, go on fire with three in a row. Solo, vs a virtual shooter, or two players on a split wall.",
+    component: load(() => import("./games/wallhoops")),
+  },
+  {
+    id: "wallcricket",
+    name: "Cricket Bowling",
+    tagline: "Hit the stumps. Howzat!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallcricket.webp",
+    feature: "img/features/wallcricket.webp",
+    description: "LiDAR wall activation: gully cricket against a painted street wall. Bowl at the stumps for wickets while the batter defends, hit the FOUR box or the brand SIX board for runs, chase a hat-trick. Solo, vs a virtual bowler, or two players.",
+    component: load(() => import("./games/wallcricket")),
+  },
+  {
+    id: "walldarts",
+    name: "Darts Wall",
+    tagline: "Ten throws. Hit the treble 20!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/walldarts.webp",
+    feature: "img/features/walldarts.webp",
+    description: "LiDAR wall activation: a giant pub dartboard on each half of the wall. Ten soft-ball throws each, trebles, doubles and the bull, with visit callouts up to ONE HUNDRED AND EIGHTY. Chase today's top score, beat a virtual thrower, or face a friend.",
+    component: load(() => import("./games/walldarts")),
+  },
+  {
     id: "wallkeeper",
     name: "Goalkeeper Save",
     tagline: "Hit the shot with your ball. Make the save!",
