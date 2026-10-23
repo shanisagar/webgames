@@ -1622,6 +1622,7 @@ export class HoleHungryGame extends ArcadeGame {
     const p = this.player, now = netNow();
     if (this.ending > 0) {
       this.ending -= dt;
+      this.simT += dt; // the clock keeps going so the guest's interpolation reaches the final positions
       this.AnimateFalling(dt);
       this.Present(dt);
       this.HostSend();
