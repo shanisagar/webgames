@@ -2,7 +2,7 @@ import {
   ArcadeGame, Art, AudioClip, CasualArt, CasualFx, CasualLook, Color, Fmt, GameInfo, GameObject, howTo, Keyboard, Mathf, Pal, Phase,
   Result, Sfx, Snd, SpriteRenderer, Text, Time, TouchScheme, UIKit, V2, V3, WallBoard, WallHit, WallHits,
 } from "../../kit";
-import { Activity, BigBanner, DiffNames, Impacts, makeWallSounds, ModeBar, setText, gauss, Throws, TodayBoard, WallSounds, WallTime } from "./WallCommon";
+import { Activity, BigBanner, brandWord, DiffNames, Impacts, makeWallSounds, ModeBar, setText, gauss, Throws, TodayBoard, WallSounds, WallTime } from "./WallCommon";
 import { ConsoleView } from "./ConsoleView";
 import { aimFor, classify, HitAction, Kind, Rng, Well } from "./Stack";
 import { Stacker } from "./Stacker";
@@ -124,7 +124,7 @@ export class WallBlocksGame extends ArcadeGame {
     this.fx = CasualFx.create(this.world, 70, 360);
     this.impacts = new Impacts(this.world, this.fx, "wb");
     this.throws = new Throws(this.world, "wb");
-    const logo = "BRICK WALL";
+    const logo = brandWord("BRICK WALL").slice(0, 14);
     this.seats = [P1Color, P2Color].map((c, i) => ({
       well: new Well(1 + i), view: new ConsoleView(this.world, c, i === 0 ? "P1" : "P2", logo), bot: null, botT: 0, inFlight: 0, color: c, tag: i === 0 ? "P1" : "P2", human: true,
     }));
@@ -332,6 +332,7 @@ export class WallBlocksGame extends ArcadeGame {
     const hits = WallHits.take();
     this.Ambient(dt);
     this.banner.update(dt);
+    if (this.attract) this.banner.hide();
     this.impacts.update(dt);
     this.throws.update(dt);
     if (this.attract) {

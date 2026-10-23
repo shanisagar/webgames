@@ -398,6 +398,7 @@ export class WallTicTacGame extends ArcadeGame {
 
   private Common(dt: number) {
     this.banner.update(dt);
+    if (this.attract) this.banner.hide();
     this.impacts.update(dt);
     this.throws.update(dt);
     this.veilA = Mathf.moveTowards(this.veilA, this.State === Phase.Over && !this.attract ? 0.6 : 0, Time.unscaledDeltaTime * 2.5);
