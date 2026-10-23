@@ -9,7 +9,8 @@ import { Mathf, SysRandom, V2 } from "../../kit/math";
 
 export const SpinRate = 205;       // deg/s while the string is slack
 export const PullSpeed = 8.2;      // world units/s along the nose while pulling
-export const KiteHit = 0.7;        // pickup / bird radius around a kite
+export const KiteHit = 0.7;
+export const CrashTime = 2.8;      // seconds slack on the rooftops before the string tangles        // pickup / bird radius around a kite
 export const RopeN = 13;
 /** Tunables (an object so the headless tests can sweep them). */
 export const Tune = { sawRate: 3, slackGive: 0.7, lever: 1 };
@@ -112,6 +113,8 @@ export class Kite {
   design = 0; stringColor = 0;
   /** Seconds since the last bird hit / pickup etc. for visuals. */
   flash = 0;
+  /** Seconds spent slack on the rooftops: too long and the string tangles. */
+  lowT = 0;
 
   constructor(id: number) { this.id = id; this.rope = new Rope(V2.zero, V2.up, RopeN); }
 
@@ -127,7 +130,7 @@ export class Kite {
     this.launchTo = to;
     this.pos = this.launchFrom; this.vel = V2.zero;
     this.ang = 90; this.spin = 0; this.hold = false; this.holdT = 0; this.slackT = 0; this.wasHold = false;
-    this.glassT = this.boostT = this.wobbleT = 0;
+    this.glassT = this.boostT = this.wobbleT = 0; this.lowT = 0;
     this.loose = this.tail = null; this.cutT = 0;
     this.rope = new Rope(anchor, this.pos, RopeN);
   }
@@ -186,6 +189,7 @@ export class Kite {
     if (y < arena.yMin) { y = arena.yMin; if (vy < 0) vy = -vy * 0.3 + 1.2; }
     if (y > arena.yMax) { y = arena.yMax; if (vy > 0) vy = -vy * 0.3; }
     this.pos = new V2(x, y); this.vel = new V2(vx, vy);
+    if (y <= arena.yMin + 0.2 && !hold) this.lowT += dt; else if (hold || y > arena.yMin + 0.6) this.lowT = Math.max(0, this.lowT - dt * 3);
     this.stepRope(dt, wind, hold);
   }
 
@@ -289,7 +293,8 @@ export type SkyEvent =
   | { type: "bird"; kite: Kite; bird: Bird }
   | { type: "pickup"; kite: Kite; pickup: Pickup }
   | { type: "gust"; wind: V2 }
-  | { type: "cross"; clash: Clash };
+  | { type: "cross"; clash: Clash }
+  | { type: "crash"; kite: Kite };
 
 /** The shared sky: wind, kites, crossings, birds and pickups. */
 export class Sky {
@@ -343,7 +348,15 @@ export class Sky {
       this.events.push({ type: "gust", wind: this.windTarget });
     }
     this.wind = V2.lerpUnclamped(this.wind, this.windTarget, 1 - Math.exp(-dt * 0.9));
-    for (const k of this.kites) k.step(dt, this.wind, this.arena, this.time);
+    for (const k of this.kites) {
+      k.step(dt, this.wind, this.arena, this.time);
+      if (k.flying && k.lowT > CrashTime) {
+        // slack on the roofs for too long: the string tangles in the bunting and breaks
+        k.cut(Math.max(1, k.rope.pts.length - 3), 0.5, this.rng);
+        this.clashes = this.clashes.filter((c) => !c.has(k));
+        this.events.push({ type: "crash", kite: k });
+      }
+    }
     this.stepBirds(dt);
     this.stepPickups(dt);
     this.stepClashes(dt);
@@ -371,7 +384,7 @@ export class Sky {
         c.crossing = true; c.lostT = 0; c.t += dt;
         c.point = hit.p; c.segA = hit.ia; c.tA = hit.ta; c.segB = hit.ib; c.tB = hit.tb;
         const pa = sawPower(a, hit.p), pb = sawPower(b, hit.p);
-        const va = a.hold ? 1 : Tune.slackGive, vb = b.hold ? 1 : Tune.slackGive; // a slack string gives way
+        const va = (a.hold ? 1 : Tune.slackGive) / a.strength, vb = (b.hold ? 1 : Tune.slackGive) / b.strength; // a slack string gives way, a strong one resists
         c.net = pa * vb - pb * va;
         if (pa === 0 && pb === 0) c.meter = Mathf.moveTowards(c.meter, 0, dt * 0.12);
         else c.meter += c.net * Tune.sawRate * this.heat * (1 + c.t / 8) * dt; // long crossings heat up

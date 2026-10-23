@@ -220,7 +220,7 @@ export class Sim {
       }
       t.x += t.vx * dt; t.y += t.vy * dt;
       // spin decay (stamina)
-      t.s -= dt * ar.decay * (1.15 - 0.05 * t.sta) / 32 * (1 + 0.25 * Math.max(0, t.s - 1));
+      t.s -= dt * ar.decay * (1.2 - 0.07 * t.sta) / 32 * (1 + 0.25 * Math.max(0, t.s - 1));
       void d;
     }
     // collisions
@@ -449,6 +449,14 @@ export const PaintCount = 8;
 export interface RivalSpec { name: string; design: number; paint: number; boost: number; bot: BotLevel }
 export interface StageSpec { n: number; arena: number; rivals: RivalSpec[]; title: string }
 
+/** Different paints for every rival (the rainbow one only rarely). */
+function distinctPaints(rng: Rng, n: number) {
+  const pool = [0, 1, 2, 3, 4, 5, 6];
+  if (rng.next() < 0.08) pool.push(PaintCount - 1);
+  for (let k = pool.length - 1; k > 0; k--) { const j = rng.int(k + 1); [pool[k], pool[j]] = [pool[j], pool[k]]; }
+  return pool.slice(0, n);
+}
+
 export function arenasUnlocked(stageReached: number) { return Arenas.filter((a) => stageReached >= a.unlock).length; }
 
 /** The endless School Yard Tour: stage n (1-based) is always the same line-up. */
@@ -461,12 +469,13 @@ export function makeStage(n: number): StageSpec {
   const boost = n > 40 ? Math.min(1, (n - 40) / 30) : 0;
   const rivals: RivalSpec[] = [];
   const names = RivalNames.slice();
+  const paints = distinctPaints(rng, count);
   for (let i = 0; i < count; i++) {
     const nm = names.splice(rng.int(names.length), 1)[0];
     const maxD = Math.min(Designs.length - 1, Math.floor(n / 6));
     const tt = Math.max(0, t - (count - 1) * 0.22 + rng.range(-0.05, 0.05));
     const bot = tt < 0.5 ? lerpBot(BotEasy, BotMedium, tt * 2) : lerpBot(BotMedium, BotHard, (tt - 0.5) * 2);
-    rivals.push({ name: nm, design: rng.int(maxD + 1), paint: rng.int(PaintCount), boost: boost - (count - 1) * 0.5 - (n <= 3 ? 1 : n <= 6 ? 0.5 : 0), bot });
+    rivals.push({ name: nm, design: rng.int(maxD + 1), paint: paints[i], boost: boost - (count - 1) * 0.5 - (n <= 3 ? 1 : n <= 6 ? 0.5 : 0), bot });
   }
   const title = count === 1 ? "1 VS 1" : count === 2 ? "3-WAY RUMBLE" : "4-WAY RUMBLE";
   return { n, arena, rivals, title };
@@ -478,10 +487,11 @@ export function makeDaily(day: number): StageSpec {
   const count = 2 + rng.int(2);
   const arena = rng.int(Arenas.length);
   const rivals: RivalSpec[] = [];
+  const paints = distinctPaints(rng, count);
   const names = RivalNames.slice();
   for (let i = 0; i < count; i++) {
     const nm = names.splice(rng.int(names.length), 1)[0];
-    rivals.push({ name: nm, design: rng.int(Designs.length), paint: rng.int(PaintCount), boost: 0, bot: lerpBot(BotMedium, BotHard, rng.range(0.1, 0.5)) });
+    rivals.push({ name: nm, design: rng.int(Designs.length), paint: paints[i], boost: 0, bot: lerpBot(BotMedium, BotHard, rng.range(0.1, 0.5)) });
   }
   return { n: day, arena, rivals, title: count === 2 ? "3-WAY RUMBLE" : "4-WAY RUMBLE" };
 }

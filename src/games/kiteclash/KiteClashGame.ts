@@ -22,7 +22,7 @@ const SoloTime = 120, RoundTime = 60, HeatAt = 38, WinCuts = 2;
 const ModeNames = ["SOLO", "DAILY", "VS CPU", "2 PLAYERS"];
 const DiffNames = ["EASY", "MEDIUM", "HARD"];
 const WinCoins = [30, 50, 80];
-const SoloStars = [900, 2200, 4000];
+const SoloStars = [1000, 2500, 4200];
 const KiteSize = 1.65;
 const Gold = Pal.hex(0xffc93c), Coral = Pal.hex(0xff5a5f), Ink = Pal.hex(0x1d1030), Sky1 = Pal.hex(0x3d8bff), Good = Pal.hex(0x4ee08a), Bad = Pal.hex(0xff4a5a);
 const P1Col = Pal.hex(0x3d8bff), P2Col = Pal.hex(0xff5a5f);
@@ -30,9 +30,9 @@ const Cheers = ["CUT!", "WHAT A CUT!", "SNAPPED!", "KAI PO CHE!", "SLICED!"];
 
 interface RivalType { name: string; strength: number; speed: number; level: number; points: number; color: Color }
 const Rivals: RivalType[] = [
-  { name: "PAPER", strength: 0.85, speed: 0.95, level: 0, points: 100, color: Pal.hex(0xfff2d8) },
-  { name: "SWIFT", strength: 1.0, speed: 1.12, level: 1, points: 150, color: Pal.hex(0x8fe0ff) },
-  { name: "CHAMPION", strength: 1.3, speed: 1.05, level: 2, points: 300, color: Gold },
+  { name: "PAPER", strength: 0.5, speed: 0.95, level: 0, points: 100, color: Pal.hex(0xfff2d8) },
+  { name: "SWIFT", strength: 0.8, speed: 1.1, level: 1, points: 150, color: Pal.hex(0x8fe0ff) },
+  { name: "CHAMPION", strength: 1.1, speed: 1.05, level: 2, points: 300, color: Gold },
 ];
 
 class KiteView {
@@ -88,7 +88,7 @@ export class KiteClashGame extends ArcadeGame {
 
   // run state
   private score = 0; private lives = 3; private timeLeft = SoloTime; private cuts = 0; private combo = 0; private comboT = 0; private bestCombo = 0;
-  private coinsRun = 0; private revived = false; private doubled = false; private glassStart = false; private pendingGlass = false;
+  private coinsRun = 0; private starBonus = 0; private revived = false; private doubled = false; private glassStart = false; private pendingGlass = false;
   private roundWins = [0, 0]; private round = 0;
   private spawnT = 0; private champT = 40; private relaunchT = 0; private endT = 0; private endReason = "";
   private tutStep = -1; private tutT = 0; private tutGoal = V2.zero;
@@ -143,7 +143,7 @@ export class KiteClashGame extends ArcadeGame {
         howTo(KiteArt.Kite(0), Color.white, "Your kite SPINS while the string is slack. HOLD (finger, mouse or SPACE) to pull: it darts where its nose points."),
         howTo(Art.Chevron, Color.white, "Steer by timing: release to let it turn, hold when the nose points where you want to go. A long release makes it sink."),
         howTo(KiteArt.Swatch(), Gold, "Cross a rival's STRING, then pull AWAY from the crossing. Pulling harder saws their string until it SNAPS."),
-        howTo(KiteArt.Glass(), Color.white, "Losing a saw? Let go: a slack string gives way, then turn and pull back. GLASS charm = sharper string for 10 s."),
+        howTo(KiteArt.Glass(), Color.white, "Keep pulling while crossed: a slack string only gives way a little and can't saw. GLASS charm = sharper string for 10 s."),
         howTo(KiteArt.Bird(0), Color.white, "Birds make your kite wobble. Wind gusts change direction: watch the streamers and the wind arrow."),
         howTo(Art.Star, Gold, "SOLO: cut as many rivals as you can in 2 minutes (3 strings). VS CPU and 2 PLAYERS: best of 3 cuts."),
         howTo(KiteArt.Coin(), Color.white, "Earn coins from cuts and wins and spend them in the KITE SHOP on kites and string colours."),
@@ -151,7 +151,7 @@ export class KiteClashGame extends ArcadeGame {
       Tips: [
         "Cut near your own kite: the string moves fastest there.",
         "Don't pull towards the crossing: that feeds your string to them.",
-        "If the meter turns red, let go and turn: a slack string gives way.",
+        "If the meter turns red, turn your nose away from the crossing and pull hard.",
         "Short taps make small hops, long holds make long dashes.",
         "Grab the GLASS charm before you attack a CHAMPION kite.",
       ],
@@ -237,7 +237,7 @@ export class KiteClashGame extends ArcadeGame {
       glow.gameObject.setActive(false); sr.gameObject.setActive(false);
       this.pickViews.push({ sr, glow });
     }
-    this.goalRing = Art.spr(w, "Goal", Art.Ring, Gold, 2.6, 22, Art.Additive);
+    this.goalRing = Art.spr(w, "Goal", Art.Ring, Gold, 2.6, 22, Art.Flat);
     this.goalRing.gameObject.setActive(false);
     this.guide = Art.spr(w, "Guide", Art.Chevron, Color.white, 1.1, 46, Art.Flat);
     this.guide.gameObject.setActive(false);
@@ -460,14 +460,14 @@ export class KiteClashGame extends ArcadeGame {
     this.kiteName = UIKit.at(UIKit.label(card, "", 40, Color.white), C, new V2(0, 40), new V2(600, 56));
     UIKit.buttonAt(card, "<", C, new V2(-330, 165), new V2(100, 110), false, () => this.Browse(0, -1), 52).setAccent(Gold);
     UIKit.buttonAt(card, ">", C, new V2(330, 165), new V2(100, 110), false, () => this.Browse(0, 1), 52).setAccent(Gold);
-    this.kiteAction = UIKit.buttonAt(card, "", C, new V2(0, -40), new V2(380, 90), false, () => this.ShopAction(0), 32);
+    this.kiteAction = UIKit.buttonAt(card, "EQUIP", C, new V2(0, -40), new V2(380, 90), false, () => this.ShopAction(0), 32);
     UIKit.at(UIKit.label(card, "STRING", 30, Pal.TextDim), C, new V2(0, -125), new V2(400, 40));
     this.strImg = UIKit.img(card, "String", KiteArt.Swatch(), Color.white);
     this.strImg.rectTransform.place(C, new V2(0, -195), new V2(420, 105));
     this.strName = UIKit.at(UIKit.label(card, "", 40, Color.white), C, new V2(0, -262), new V2(600, 56));
     UIKit.buttonAt(card, "<", C, new V2(-330, -200), new V2(100, 110), false, () => this.Browse(1, -1), 52).setAccent(Gold);
     UIKit.buttonAt(card, ">", C, new V2(330, -200), new V2(100, 110), false, () => this.Browse(1, 1), 52).setAccent(Gold);
-    this.strAction = UIKit.buttonAt(card, "", C, new V2(0, -345), new V2(380, 90), false, () => this.ShopAction(1), 32);
+    this.strAction = UIKit.buttonAt(card, "EQUIP", C, new V2(0, -345), new V2(380, 90), false, () => this.ShopAction(1), 32);
     UIKit.buttonAt(card, "CLOSE", C, new V2(0, -440), new V2(320, 84), true, () => this.OpenShop(false), 36).setAccent(Gold);
     this.shop.setActive(false);
   }
@@ -759,6 +759,7 @@ export class KiteClashGame extends ArcadeGame {
     this.sky.birdT = 7; this.sky.pickT = 9;
     this.sky.canClash = (a, b) => this.humans.includes(a) || this.humans.includes(b);
     const me = this.NewKite(0, this.KiteSel, this.StrSel, 1);
+    me.strength = 1.5; // festival flyers: your string is the best on the roofs
     this.humans = [me];
     this.LaunchHuman(false);
     this.spawnT = 2.5; this.champT = 42; this.relaunchT = 0; this.endT = 0;
@@ -800,7 +801,7 @@ export class KiteClashGame extends ArcadeGame {
     k.strength = type.strength; k.speedMul = type.speed;
     k.launch(hand, new V2(x * 0.8, Math.min(hand.y + 5 + this.rng.nextDouble() * 4, this.sky.arena.yMax - 1)), 1.6);
     const lv: BotLevel = { ...BotLevels[type.level] };
-    if (type.level === 0) lv.aggr = 0.45;
+    if (type.level === 0) lv.aggr = 0.35;
     const bot = new KiteBot(k, lv, new SysRandom(this.rng.next()));
     bot.passive = passive;
     this.bots.set(k, bot);
@@ -921,9 +922,14 @@ export class KiteClashGame extends ArcadeGame {
       if (this.timeLeft <= 10 && Math.ceil(this.timeLeft) !== Math.ceil(this.timeLeft + dt) && this.timeLeft > 0) Sfx.play(Snd.Tick, 0.7);
     }
     me.hold = (this.step === Step.Play && me.state === KState.Fly) ? this.HumanHold(0) : false;
+    // only a few rivals hunt you at once (more as the festival goes on); the others fly their own patch of sky
+    const hunters = 1 + Math.floor((SoloTime - this.timeLeft) / 50);
+    let n = 0;
     for (const k of this.sky.kites) {
       const b = this.bots.get(k);
-      if (b) k.hold = this.step === Step.Play ? b.tick(dt, this.sky, me.flying ? me : null) : false;
+      if (!b) continue;
+      const hunt = k.tethered && n++ < hunters;
+      k.hold = this.step === Step.Play ? b.tick(dt, this.sky, me.flying && hunt ? me : null) : false;
     }
     if (tut) this.TickTutorial(dt);
     else if (this.step === Step.Play) this.SoloSpawner(dt);
@@ -952,7 +958,7 @@ export class KiteClashGame extends ArcadeGame {
 
   private SoloSpawner(dt: number) {
     const elapsed = SoloTime - this.timeLeft;
-    const want = elapsed < 12 ? 1 : elapsed < 40 ? 2 : elapsed < 80 ? 3 : 4;
+    const want = elapsed < 20 ? 1 : elapsed < 60 ? 2 : elapsed < 95 ? 3 : 4;
     const rivals = this.sky.kites.filter((k) => this.bots.has(k) && k.tethered);
     this.champT -= dt;
     if (this.champT <= 0 && !rivals.some((k) => this.rivalType.get(k) === Rivals[2]) && this.timeLeft > 12) {
@@ -1005,6 +1011,7 @@ export class KiteClashGame extends ArcadeGame {
         if (this.tutT > 2.5) {
           this.tutStep = -1;
           this.Data.set("tut", 1);
+          this.score = 0;
           this.UI.Hint(null);
           this.UI.Announce("2 MINUTES: GO!", Gold, 1.3);
           this.spawnT = 1.5;
@@ -1040,6 +1047,7 @@ export class KiteClashGame extends ArcadeGame {
         if (!this.attract && this.State === Phase.Playing) this.UI.Float(new V2(0, this.sky.arena.yMax - 1.5), `WIND SHIFT ${arrow}`, Color.white, 0.8);
         break;
       }
+      case "crash": this.OnCrash(e.kite); break;
       case "cross":
         if (!this.attract && this.humans.some((h) => e.clash.has(h))) Sfx.play(Snd.Zap, 0.35, 1.4);
         break;
@@ -1092,6 +1100,26 @@ export class KiteClashGame extends ArcadeGame {
       this.UI.Float(at.add(new V2(0, 0.8)), `+${pts}`, Gold, 1.2);
       this.UI.Announce(this.combo > 1 ? `COMBO x${this.combo}!` : type === Rivals[2] ? "CHAMPION CUT!" : Cheers[Math.floor(Math.random() * Cheers.length)], Gold, 1.0);
     }
+  }
+
+  private OnCrash(k: Kite) {
+    const human = this.humans.includes(k);
+    this.fx.pop(k.pos, Color.white, 12, 4, 0.18, 0.5);
+    if (this.mode === Mode.Vs || this.mode === Mode.TwoP) {
+      const w = 1 - this.sky.kites.indexOf(k);
+      this.UI.Announce("TANGLED ON THE ROOFS!", Bad, 1.2);
+      Sfx.playClip(this.lostClip, 0.6);
+      this.RoundWon(w, null);
+      return;
+    }
+    if (!human) return;
+    Sfx.playClip(this.lostClip, 0.7);
+    this.Back.Flash(Bad, 0.2);
+    this.combo = 0; this.comboT = 0;
+    if (this.tutStep >= 0) { this.relaunchT = 1.2; this.UI.Announce("TOO LOW: KEEP IT UP!", Bad, 1.2); return; }
+    this.lives--;
+    if (this.lives <= 0 && this.step === Step.Play) { this.step = Step.Over; this.endT = 1.8; this.endReason = "lives"; this.UI.Announce("OUT OF STRING!", Bad, 1.5); }
+    else { this.UI.Announce(`TANGLED! ${this.lives} LEFT`, Bad, 1.3); this.relaunchT = 1.8; }
   }
 
   private CutFx(at: V2, loser: Kite, big: boolean) {
@@ -1176,6 +1204,7 @@ export class KiteClashGame extends ArcadeGame {
     }
     const stars = total >= SoloStars[2] ? 3 : total >= SoloStars[1] ? 2 : total >= SoloStars[0] ? 1 : 0;
     this.coinsRun += stars * 10;
+    this.starBonus = stars * 10;
     this.Data.add("coins", this.coinsRun);
     this.Data.add("cuts", this.cuts);
     this.Data.max("stars" + (daily ? "D" : "S"), stars);
@@ -1204,6 +1233,7 @@ export class KiteClashGame extends ArcadeGame {
     this.revived = true;
     // the coins of the first part were paid out: keep counting from here
     this.Data.add("coins", -this.coinsRun);
+    this.coinsRun -= this.starBonus;
     this.lives = 1;
     this.step = Step.Play;
     this.endT = 0;
@@ -1406,18 +1436,18 @@ export class KiteClashGame extends ArcadeGame {
     // string
     const tethered = k.tethered;
     if (tethered) {
-      v.rope.setPositions(k.rope.pts);
+      v.rope.setPositions(smoothPts(k.rope.pts));
       v.rope.color = glint ? Color.lerp(strCol, Color.white, 0.25 + 0.25 * Math.sin(t * 8)) : strCol;
       v.rope.widthMultiplier = human ? 0.075 : 0.06;
     } else v.rope.positionCount = 0;
     const glass = tethered && k.glassT > 0;
     if (glass) {
-      v.glass.setPositions(k.rope.pts);
+      v.glass.setPositions(smoothPts(k.rope.pts, 2));
       v.glass.color = Pal.hex(0x9ff6ff).withAlpha(0.35 + 0.25 * Math.sin(t * 14 + i));
     } else v.glass.positionCount = 0;
     if (k.state === KState.Cut) {
-      if (k.loose) { v.loose.setPositions(k.loose.pts); v.loose.color = strCol.withAlpha(0.9); } else v.loose.positionCount = 0;
-      if (k.tail) { v.cutTail.setPositions(k.tail.pts); v.cutTail.color = strCol.withAlpha(Mathf.clamp01(2 - k.cutT * 0.35)); } else v.cutTail.positionCount = 0;
+      if (k.loose) { v.loose.setPositions(smoothPts(k.loose.pts)); v.loose.color = strCol.withAlpha(0.9); } else v.loose.positionCount = 0;
+      if (k.tail) { v.cutTail.setPositions(smoothPts(k.tail.pts)); v.cutTail.color = strCol.withAlpha(Mathf.clamp01(2 - k.cutT * 0.35)); } else v.cutTail.positionCount = 0;
     } else { v.loose.positionCount = 0; v.cutTail.positionCount = 0; }
     // body
     const d = Designs[k.design];
@@ -1434,7 +1464,10 @@ export class KiteClashGame extends ArcadeGame {
     // halo: glass / shield / champion / flash
     const champ = this.rivalType.get(k) === Rivals[2];
     let halo: Color | null = null;
-    if (k.flash > 0) halo = Color.white.withAlpha(k.flash * 1.2);
+    if (human && k.lowT > 0.5 && k.flying && !this.attract) {
+      halo = Bad.withAlpha(0.35 + 0.35 * Math.sin(t * 14));
+      if (k.lowT > 0.5 && k.lowT - Time.deltaTime <= 0.5) this.UI.Float(k.pos.add(new V2(0, 1.3)), "TOO LOW! PULL UP!", Bad, 0.8);
+    } else if (k.flash > 0) halo = Color.white.withAlpha(k.flash * 1.2);
     else if (glass) halo = Pal.hex(0x6fe8ff).withAlpha(0.45 + 0.15 * Math.sin(t * 10));
     else if (k.safeT > 0 && tethered && !this.attract && this.tutStep < 0) halo = Color.white.withAlpha(0.3 + 0.25 * Math.sin(t * 12));
     else if (k.boostT > 0) halo = Pal.hex(0xc8fff0).withAlpha(0.4);
@@ -1487,7 +1520,7 @@ export class KiteClashGame extends ArcadeGame {
       set(this.comboText, this.combo > 1 && this.comboT > 0 ? `COMBO x${this.combo}` : "");
       this.lifeIcons.forEach((im, i) => {
         im.sprite = KiteArt.Kite(this.KiteSel);
-        im.color = i < this.lives ? Color.white : new Color(0.2, 0.2, 0.3, 0.45);
+        im.color = i < this.lives ? Color.white : new Color(0.55, 0.55, 0.7, 0.4);
       });
       set(this.glassBadge, me && me.glassT > 0 ? `GLASS STRING ${Math.ceil(me.glassT)}` : me && me.boostT > 0 ? `WIND BOOST ${Math.ceil(me.boostT)}` : "");
     } else {
@@ -1499,7 +1532,7 @@ export class KiteClashGame extends ArcadeGame {
         p.name.color = i === 0 ? Pal.hex(0x9cc4ff) : Pal.hex(0xffa6a8);
         p.pips.forEach((im, k) => {
           im.sprite = KiteArt.Kite(ks[i]?.design ?? 0);
-          im.color = k < this.roundWins[i] ? Color.white : new Color(0.2, 0.2, 0.3, 0.45);
+          im.color = k < this.roundWins[i] ? Color.white : new Color(0.55, 0.55, 0.7, 0.45);
         });
         set(p.timer, Fmt.clock(Math.ceil(left)));
       });
@@ -1577,6 +1610,23 @@ export class KiteClashGame extends ArcadeGame {
       clashes: this.sky.clashes.map((c) => ({ a: c.a.id, b: c.b.id, meter: c.meter, crossing: c.crossing, x: c.point.x, y: c.point.y })),
     };
   }
+}
+
+/** Catmull-Rom resample so a verlet string with few points draws as a smooth curve. */
+function smoothPts(p: V2[], sub = 3): V2[] {
+  if (p.length < 3) return p;
+  const out: V2[] = [];
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(p.length - 1, i + 2)];
+    for (let k = 0; k < sub; k++) {
+      const t = k / sub, t2 = t * t, t3 = t2 * t;
+      out.push(new V2(
+        0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)));
+    }
+  }
+  out.push(p[p.length - 1]);
+  return out;
 }
 
 function Random2() { const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()); return new V2(Math.cos(a) * r, Math.sin(a) * r); }

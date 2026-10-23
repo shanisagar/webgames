@@ -188,7 +188,7 @@ export class TopRumbleGame extends ArcadeGame {
     this.BuildSounds();
     this.ApplyArena(0);
     this.Layout();
-    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__tr = { game: this, makeStage, makeDaily };
+    if (import.meta.env.DEV) { const w = window as unknown as Record<string, unknown>; w.__tr = { game: this, makeStage, makeDaily }; w.__trArt = { SparkSprite, ChipSprite, Glow: () => CasualArt.Soft }; }
   }
 
   private MakeView() {
@@ -277,7 +277,7 @@ export class TopRumbleGame extends ArcadeGame {
       pip.rectTransform.place(new V2(1, 1), new V2(-58 + k * 34, -30), new V2(32, 32));
       pips.push(pip);
     }
-    const out = UIKit.at(UIKit.label(root, "", 40, Red), UIKit.Center, new V2(40, 0), new V2(300, 60));
+    const out = UIKit.at(UIKit.label(root, "", 30, Red), new V2(0, 0), new V2(250, 36), new V2(260, 44));
     UIKit.glow(out, Ink, 4);
     return { root, glow, name, spin, spinBg, energy, energyBg, pips, icon, out };
   }
@@ -293,8 +293,8 @@ export class TopRumbleGame extends ArcadeGame {
       b.setAccent(accents[i]);
       this.modeButtons.push(b);
     }
-    this.opt1 = UIKit.buttonAt(ex, "", UIKit.Center, new V2(-330, -100), new V2(320, 88), false, () => this.CycleOpt(1), 26);
-    this.opt2 = UIKit.buttonAt(ex, "", UIKit.Center, new V2(0, -100), new V2(320, 88), false, () => this.CycleOpt(2), 26);
+    this.opt1 = UIKit.buttonAt(ex, "CPU", UIKit.Center, new V2(-330, -100), new V2(320, 88), false, () => this.CycleOpt(1), 26);
+    this.opt2 = UIKit.buttonAt(ex, "ARENA", UIKit.Center, new V2(0, -100), new V2(320, 88), false, () => this.CycleOpt(2), 26);
     this.shopButton = UIKit.buttonAt(ex, "TOP SHOP", UIKit.Center, new V2(330, -100), new V2(320, 88), false, () => this.OpenShop(true), 28);
     this.shopButton.setAccent(Gold);
     this.optInfo = UIKit.at(UIKit.label(ex, "", 28, Cream), UIKit.Center, new V2(-165, -100), new V2(650, 88));
@@ -368,11 +368,15 @@ export class TopRumbleGame extends ArcadeGame {
     this.shop = UIKit.node("Shop", parent).stretch();
     UIKit.dim(this.shop, 0.8);
     const card = UIKit.card(this.shop, new V2(900, 1010), Gold);
+    const solid = UIKit.img(card, "Solid", Art.UiRound, Pal.hex(0x1e140c));
+    solid.rectTransform.stretch(2);
+    solid.rectTransform.setSiblingIndex(1);
     UIKit.glow(UIKit.at(UIKit.label(card, "TOP SHOP", 56, Color.white), C, new V2(0, 440), new V2(800, 70)), Ink, 3);
     UIKit.img(card, "Coin", CoinIcon(), Color.white).rectTransform.place(C, new V2(-70, 380), new V2(48, 48));
     this.shopCoins = UIKit.at(UIKit.label(card, "0", 40, Gold, TextAnchor.MiddleLeft), C, new V2(60, 380), new V2(200, 56));
     this.shopTop = UIKit.img(card, "Preview", TopSprite(0, 0), Color.white);
     this.shopTop.rectTransform.place(C, new V2(0, 245), new V2(220, 220));
+    UIKit.img(card, "Shine", ShineSprite(), Color.white).rectTransform.place(C, new V2(0, 245), new V2(220, 220));
     UIKit.buttonAt(card, "<", C, new V2(-330, 245), new V2(110, 120), false, () => this.Browse(0, -1), 56).setAccent(Gold);
     UIKit.buttonAt(card, ">", C, new V2(330, 245), new V2(110, 120), false, () => this.Browse(0, 1), 56).setAccent(Gold);
     this.shopName = UIKit.at(UIKit.label(card, "", 46, Color.white), C, new V2(0, 108), new V2(700, 60));
@@ -388,8 +392,8 @@ export class TopRumbleGame extends ArcadeGame {
     this.paintName = UIKit.at(UIKit.label(card, "", 40, Color.white), C, new V2(0, -305), new V2(500, 56));
     UIKit.buttonAt(card, "<", C, new V2(-330, -305), new V2(110, 96), false, () => this.Browse(1, -1), 50).setAccent(Gold);
     UIKit.buttonAt(card, ">", C, new V2(330, -305), new V2(110, 96), false, () => this.Browse(1, 1), 50).setAccent(Gold);
-    this.paintAction = UIKit.buttonAt(card, "EQUIP", C, new V2(0, -390), new V2(420, 86), false, () => this.ShopAction(1), 32);
-    UIKit.buttonAt(card, "CLOSE", C, new V2(0, -470), new V2(300, 76), false, () => this.OpenShop(false), 34).setAccent(Gold);
+    this.paintAction = UIKit.buttonAt(card, "EQUIP", C, new V2(0, -385), new V2(420, 80), false, () => this.ShopAction(1), 32);
+    UIKit.buttonAt(card, "CLOSE", C, new V2(0, -468), new V2(300, 70), false, () => this.OpenShop(false), 34).setAccent(Gold);
     this.shop.setActive(false);
   }
 
@@ -466,9 +470,9 @@ export class TopRumbleGame extends ArcadeGame {
       let sprite = SneakerSprite(pair), size = 2.2, ang = (a * 180) / Math.PI + 90, off = second ? 0.75 : -0.75;
       if (i === 1 || i === 3) {
         sprite = k % 3 === 0 ? PencilSprite(k) : MarbleSprite(k);
-        size = k % 3 === 0 ? 4.2 : 0.7;
+        size = k % 3 === 0 ? 4.2 : 1;
         ang = rng.range(0, 360); off = second ? 1.4 : -1.2;
-      } else if (k % 4 === 3) { sprite = i === 0 ? ChalkSprite(k) : MarbleSprite(k); size = i === 0 ? 1.4 : 0.7; ang = rng.range(0, 360); }
+      } else if (k % 4 === 3) { sprite = i === 0 ? ChalkSprite(k) : MarbleSprite(k); size = i === 0 ? 1.4 : 1; ang = rng.range(0, 360); }
       sr.sprite = sprite;
       const tx = -Math.sin(a), ty = Math.cos(a);
       sr.transform.localPosition = new V3(Math.cos(a) * rad + tx * off, Math.sin(a) * rad + ty * off, 0);
@@ -488,7 +492,7 @@ export class TopRumbleGame extends ArcadeGame {
     this.Fx.CameraTarget = V2.zero;
     this.portrait = Screen.height >= Screen.width;
     const duo = this.State !== Phase.Title && this.mode === Mode.Duo;
-    const need = 23.5;
+    const need = this.portrait ? 23.5 : 22;
     let cx: number, cy: number;
     if (this.portrait) {
       const r = duo ? this.PlayRect(170, 170, 0.1) : this.PlayRect(this.players.length > 2 && this.State !== Phase.Title ? 330 : 200, 120, 0.1);
@@ -529,8 +533,8 @@ export class TopRumbleGame extends ArcadeGame {
         this.infoText.rectTransform.place(new V2(0, 0.5), new V2(150, 0), new V2(260, 44));
         this.infoText.rectTransform.localEulerAngles = new V3(0, 0, 90);
       } else {
-        this.cards[0].root.place(new V2(0, 0.5), new V2(40 + cw / 2, 0), new V2(cw, ch));
-        this.cards[1].root.place(new V2(1, 0.5), new V2(-40 - cw / 2, 0), new V2(cw, ch));
+        this.cards[0].root.place(new V2(0, 0), new V2(30 + cw / 2, 90), new V2(cw, ch));
+        this.cards[1].root.place(new V2(1, 0), new V2(-30 - cw / 2, 90), new V2(cw, ch));
         this.infoText.rectTransform.place(new V2(0.5, 1), new V2(0, -50), new V2(620, 44));
         this.infoText.rectTransform.localEulerAngles = V3.zero;
       }
@@ -709,9 +713,7 @@ export class TopRumbleGame extends ArcadeGame {
       this.Simulate(dt, true);
       if (this.sim.winner >= 0) { this.attractT += dt; if (this.attractT > 2.5) this.StartAttract(); }
     } else {
-      // result screen: the tops keep spinning down behind it
-      for (let i = 0; i < this.players.length; i++) { const p = this.players[i]; if (p.bot) p.bot.drive(this.sim, i, dt); else { this.sim.tops[i].nx = 0; this.sim.tops[i].ny = 0; } }
-      this.Simulate(dt, true);
+      // result screen: the battle is frozen (a RE-SPIN continues it exactly), the tops just keep turning
     }
     for (const h of this.hums) h.volume = Mathf.moveTowards(h.volume, 0, dt);
     this.Present(dt);
@@ -724,7 +726,7 @@ export class TopRumbleGame extends ArcadeGame {
     this.ReadPointers();
     switch (this.step) {
       case Step.Intro:
-        if (this.timer > 0.9) { this.step = Step.Aim; this.timer = 0; if (this.Data.get("games") <= 2 && this.round === 1) this.UI.Hint(this.mode === Mode.Duo ? "Both players: pull back from your mark and let go!" : "Pull back from your top and let go to throw it!"); }
+        if (this.timer > 0.9) { this.step = Step.Aim; this.timer = 0; if (this.Data.get("games") <= 2 && this.round === 1 && this.portrait) this.UI.Hint(this.mode === Mode.Duo ? "Both players: pull back from your mark and let go!" : "Pull back from your top and let go to throw it!"); }
         break;
       case Step.Aim: this.TickAim(dt); break;
       case Step.Rip:
@@ -901,7 +903,7 @@ export class TopRumbleGame extends ArcadeGame {
     for (let i = 0; i < this.players.length; i++) { const t = this.sim.tops[i]; this.fx.pop(new V2(t.x, t.y), Cream, 10, 3, 0.2, 0.35); }
     this.step = Step.Battle; this.timer = 0;
     for (const s of this.slots) { s.dragging = false; s.start = s.cur; }
-    if (this.Data.get("games") <= 2 && this.round === 1) this.UI.Toast(this.mode === Mode.Duo ? "Drag on your side to nudge your top!" : "Drag anywhere to nudge your top. Stay in the ring!", 3);
+    if (this.Data.get("games") <= 2 && this.round === 1 && this.portrait) this.UI.Toast(this.mode === Mode.Duo ? "Drag on your side to nudge your top!" : "Drag anywhere to nudge your top. Stay in the ring!", 3);
   }
 
   // ------------------------------------------------------------------ battle
@@ -1013,6 +1015,8 @@ export class TopRumbleGame extends ArcadeGame {
       case Ev.Launch: break;
     }
   }
+
+  private DustColor() { return [new Color(0.9, 0.85, 0.75, 0.45), new Color(0.95, 0.8, 0.6, 0.35), new Color(1, 0.92, 0.7, 0.5), new Color(1, 1, 1, 0.3)][Mathf.clamp(this.builtArena, 0, 3)]; }
 
   private Scuff(p: V2, angDeg: number, size: number) {
     const s = this.scuffs[this.scuffNext];
@@ -1304,7 +1308,7 @@ export class TopRumbleGame extends ArcadeGame {
       const sh = 0.18 + lift * 1.2 + wob * 0.12;
       v.shadow.transform.localPosition = new V3(sh * 0.7 + wx * 0.5, -sh + wy * 0.5, 0);
       v.shadow.transform.localScale = new V3(size * 1.25 * (1 - 0.25 * lift), size * 1.25 * (1 - 0.25 * lift), 1);
-      v.shadow.color = new Color(0, 0, 0, (0.38 - 0.18 * lift) * (showTop ? 1 : 0.4));
+      v.shadow.color = new Color(0.1, 0.05, 0, (0.55 - 0.25 * lift) * (showTop ? 1 : 0.4));
       const ownerOn = t.alive && (playing || this.State === Phase.Over);
       v.owner.color = (this.players[i]?.color ?? Color.white).withAlpha(ownerOn ? 0.55 + 0.2 * Math.sin(Time.time * 5) : 0);
       v.owner.transform.localScale = new V3(size * 1.35, size * 1.35, 1);
@@ -1312,6 +1316,10 @@ export class TopRumbleGame extends ArcadeGame {
       if (t.alive && t.launched && t.air <= 0) {
         v.scuffT -= dt * t.speed;
         if (v.scuffT <= 0) { v.scuffT = 2.2; if (t.speed > 3) this.Scuff(new V2(t.x, t.y), Math.atan2(t.vy, t.vx) * Mathf.Rad2Deg, 0.9); }
+        if (t.speed > 2.5 && Math.random() < dt * t.speed * 3) {
+          const back = new V2(-t.vx, -t.vy).normalized;
+          this.fx.emit(new V2(t.x, t.y).add(back.mul(t.r * 0.8)), back.mul(0.6 + Math.random()).add(new V2((Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.2)), this.DustColor(), 0.5 + Math.random() * 0.4, 0.5 + Math.random() * 0.3, CasualArt.Soft, 0, 0, false, 2);
+        }
       }
     }
     for (const s of this.scuffs) {
@@ -1339,6 +1347,8 @@ export class TopRumbleGame extends ArcadeGame {
       c.glow.color = this.players[i].color.withAlpha(t.alive ? 0.12 + (this.step === Step.Aim && !this.IsLocked(i) ? 0.2 * (0.5 + 0.5 * Math.sin(Time.time * 6)) : 0) : 0);
       c.icon.rectTransform.localEulerAngles = new V3(0, 0, c.icon.rectTransform.localEulerAngles.z - (t.alive && t.launched ? 300 * Math.min(1, t.s) : 0) * Time.deltaTime);
       c.icon.color = t.alive ? Color.white : new Color(1, 1, 1, 0.35);
+      c.spinBg.setActive(t.alive || !t.launched);
+      if (this.players[i].human) c.energyBg.setActive(t.alive || !t.launched);
     }
     // info line
     const m = this.mode;
@@ -1351,12 +1361,11 @@ export class TopRumbleGame extends ArcadeGame {
       const s = this.slots[h];
       if (i < 0 || this.step !== Step.Aim) { if (this.step !== Step.Rip) at.text = ""; this.Stick(h, false); continue; }
       const t = tops[i];
-      const off = new V2(t.sx, t.sy).normalized.mul(this.mode === Mode.Duo && !this.portrait ? 0 : 3.3);
-      const sideOff = this.mode === Mode.Duo && !this.portrait ? new V2(t.sx, t.sy).normalized.mul(3.4) : V2.zero;
-      at.rectTransform.anchoredPosition = this.SimToHud(new V2(t.sx, t.sy).add(off).add(sideOff));
+      if (this.mode === Mode.Duo && !this.portrait) at.rectTransform.anchoredPosition = this.SimToHud(new V2(t.sx, t.sy)).add(new V2(0, 150));
+      else at.rectTransform.anchoredPosition = this.SimToHud(new V2(t.sx, t.sy).add(new V2(t.sx, t.sy).normalized.mul(3.3)));
       at.rectTransform.localEulerAngles = new V3(0, 0, this.FlipHud(h) ? 180 : 0);
       const secs = Math.max(0, Math.ceil(this.aimClock));
-      if (!s.locked) at.text = s.dragging ? (s.power > 0.02 ? "LET GO TO THROW!" : "PULL BACK FURTHER") : `PULL BACK & LET GO  ${secs}`;
+      if (!s.locked) at.text = s.dragging ? (s.power > 0.02 ? "LET GO TO THROW!" : "PULL BACK FURTHER") : s.keyAim ? `${this.mode === Mode.Duo && h === 1 ? "ENTER" : "SPACE"} TO THROW  ${secs}` : `PULL BACK & LET GO  ${secs}`;
       at.color = s.locked ? Green : this.aimClock < 4 ? Color.lerp(Red, Color.white, 0.5 + 0.5 * Math.sin(Time.time * 10)) : Color.white;
     }
     if (this.step === Step.Battle) for (let h = 0; h < 2; h++) this.Stick(h, this.slots[h].dragging && this.HumanIndex(h) >= 0);
