@@ -22,6 +22,26 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "mazemuncher",
+    name: "Maze Muncher",
+    tagline: "Eat the dots. Dodge the ghosts.",
+    genre: "Arcade",
+    icon: "img/icons/mazemuncher.webp",
+    feature: "img/features/mazemuncher.webp",
+    description: "Chomp every dot in four neon mazes while four crafty chasers hunt you down, then grab a power pellet and turn the tables. Play solo for a high score, race a CPU muncher on split screen, or face a friend across the table.",
+    component: load(() => import("./games/mazemuncher")),
+  },
+  {
+    id: "pinball",
+    name: "Nebula Pinball",
+    tagline: "Tap left and right to work the flippers.",
+    genre: "Arcade",
+    icon: "img/icons/pinball.webp",
+    feature: "img/features/pinball.webp",
+    description: "A neon space pinball table with bumpers, drop targets, a ramp, orbit combos, rotating missions and 3-ball multiball jackpots. Chase a high score solo, take turns against a CPU, or pass the phone in 2-player.",
+    component: load(() => import("./games/pinball")),
+  },
+  {
     id: "fruitslice",
     name: "Fruit Slice",
     tagline: "Swipe to slice. Skip the bombs.",

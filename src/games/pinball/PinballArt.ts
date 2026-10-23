@@ -198,7 +198,7 @@ export function PlayfieldSprite(t: Table) {
     arrow(Inserts.lanesArrow, Math.PI / 2, Neon.cyan, 0.7);
     arrow(Inserts.spinner, Math.PI / 2, Neon.violet, 0.55);
     text(ctx, "RAMP", X(2.3), Y(-2.55), S(0.26), "rgba(155,232,74,0.65)", 1.1);
-    text(ctx, "ORBIT", X(-4.15), Y(-0.95), S(0.22), "rgba(155,107,255,0.7)");
+    text(ctx, "ORBIT", X(-4.18), Y(3.4), S(0.32), "rgba(185,150,255,0.75)", -Math.PI / 2);
     ctx.restore();
 
     // walls

@@ -26,6 +26,8 @@ const DiffNames = ["EASY", "NORMAL", "HARD"];
 const BallsPerGame = 3;
 const MaxBalls = 4;
 const TableW = PF.x1 - PF.x0, TableH = PF.y1 - PF.y0;
+/** Compact score for the two-score result line. */
+const short = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? (n / 1e3).toFixed(1) + "K" : Fmt.n(n));
 
 interface BallView { root: GameObject; ball: SpriteRenderer; shadow: SpriteRenderer; glow: SpriteRenderer; trail: SpriteRenderer[]; hist: V2[] }
 interface Light { sr: SpriteRenderer; on: number; color: Color }
@@ -649,7 +651,7 @@ export class PinballGame extends ArcadeGame {
       this.Finish(new Result({
         Headline: winner < 0 ? "DRAW!" : `PLAYER ${winner + 1} WINS!`,
         HeadlineColor: winner === 1 ? Neon.pink : winner === 0 ? Neon.cyan : Color.white,
-        Value: `${Fmt.n(a)} – ${Fmt.n(b)}`,
+        Value: `${short(a)} – ${short(b)}`,
         BestLine: `MATCHES  P1 ${this.Data.get("p1")}  –  ${this.Data.get("p2")} P2`,
         Stats: [["P1 MISSIONS", String(this.sims[0].missionsDone)], ["P2 MISSIONS", String(this.sims[1].missionsDone)], ["P1 RAMPS", String(this.sims[0].rampsMade)], ["P2 RAMPS", String(this.sims[1].rampsMade)]],
         Primary: "REMATCH",
@@ -663,8 +665,8 @@ export class PinballGame extends ArcadeGame {
     this.Finish(new Result({
       Headline: won ? "YOU WIN!" : draw ? "DRAW!" : "CPU WINS",
       HeadlineColor: won ? Gold : draw ? Color.white : Pal.hex(0xffb0c0),
-      Value: `${Fmt.n(a)} – ${Fmt.n(b)}`,
-      Stars: won ? 1 + this.diff : 0,
+      Value: `${short(a)} – ${short(b)}`,
+      Stars: won ? 1 + this.diff : -1,
       BestLine: `VS ${DiffNames[this.diff]}:  ${this.Data.get("w" + this.diff)} WON  ·  ${this.Data.get("l" + this.diff)} LOST`,
       Stats: [["CPU", DiffNames[this.diff]], ["MISSIONS", `${this.sims[0].missionsDone} – ${this.sims[1].missionsDone}`], ["RAMPS", `${this.sims[0].rampsMade} – ${this.sims[1].rampsMade}`], ["JACKPOTS", `${this.sims[0].jackpots} – ${this.sims[1].jackpots}`]],
       Primary: won ? "PLAY AGAIN" : "REMATCH",
@@ -681,6 +683,8 @@ export class PinballGame extends ArcadeGame {
   /** Rewarded: one more ball for the player, then the game continues. */
   private ExtraBall(p: number) {
     this.revives++;
+    // the match goes on: take back the loss that was just recorded
+    if (this.mode === 1) this.Data.add("l" + this.diff, -1);
     this.extraBalls[p]++;
     this.cur = p;
     this.Revive();

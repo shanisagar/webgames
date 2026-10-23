@@ -266,6 +266,7 @@ export class MazeMuncherGame extends ArcadeGame {
   private portrait = true;
   private rotateTop = false;
   private totalDots = 0;
+  private hintCleared = false;
 
   private modeButtons: ArcadeButton[] = [];
   private diffButtons: ArcadeButton[] = [];
@@ -519,6 +520,7 @@ export class MazeMuncherGame extends ArcadeGame {
     this.revives = 0;
     this.level = 1;
     this.totalDots = 0;
+    this.hintCleared = false;
     this.swipes.clear();
     this.Data.add("games", 1);
     const touch = matchMedia?.("(pointer: coarse)").matches ?? false;
@@ -560,6 +562,7 @@ export class MazeMuncherGame extends ArcadeGame {
     if (this.TestBudget === 0) dt = 0;
     else if (this.TestBudget > 0) this.TestBudget--;
     this.TestFrame++;
+    if (this.RunTime > 5 && !this.hintCleared) { this.hintCleared = true; this.UI.Hint(null); }
     this.ReadInput();
     for (const b of this.boards) {
       b.bot?.think(b.sim, dt);
@@ -809,7 +812,7 @@ export class MazeMuncherGame extends ArcadeGame {
       Headline: won ? "YOU WIN!" : draw ? "DRAW!" : "CPU WINS",
       HeadlineColor: won ? Gold : draw ? Color.white : Pal.hex(0xffb0c0),
       Value: `${Fmt.n(a.score)} – ${Fmt.n(b.score)}`,
-      Stars: won ? 1 + (byClear ? 1 : 0) + (this.diff === 2 || left >= 30 ? 1 : 0) : 0,
+      Stars: won ? 1 + (byClear ? 1 : 0) + (this.diff === 2 || left >= 30 ? 1 : 0) : -1,
       BestLine: `VS ${DiffNames[this.diff]}:  ${this.Data.get("w" + this.diff)} WON  ·  ${this.Data.get("l" + this.diff)} LOST`,
       Stats: [["CPU", DiffNames[this.diff]], ["WIN BY", byClear ? "CLEARING" : "POINTS"], ["DOTS LEFT", `${a.dotsLeft} – ${b.dotsLeft}`], ["CHASERS", `${a.ghostsEaten} – ${b.ghostsEaten}`]],
       Primary: won ? "PLAY AGAIN" : "REMATCH",

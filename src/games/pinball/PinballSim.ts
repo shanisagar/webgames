@@ -278,12 +278,12 @@ export class PinSim {
     for (const b of this.balls)
       if (b.x > 4.6 && b.y < PlungerY + 1.2) {
         b.y = Math.max(b.y, PlungerY + BallR + 0.07);
-        b.vy = 14 + 30 * pull + this.rand() * 0.6;
+        b.vy = 14 + 30 * pull + (this.rand() - 0.5) * 3;
         b.vx = 0;
         launched = true;
       }
     if (launched && pull > 0.15) {
-      if (this.needLaunch) this.saveT = Math.max(this.saveT, 10);
+      if (this.needLaunch && this.saveT <= 0) this.saveT = 10;
       this.needLaunch = false;
       this.events.push({ k: "launch" });
     }
@@ -322,6 +322,11 @@ export class PinSim {
     const sub = Math.max(1, Math.ceil(dt / (1 / 480)));
     const h = dt / sub;
     for (let s = 0; s < sub; s++) this.substep(h);
+
+    // a weak plunge that rolls back down waits on the plunger again
+    if (!this.needLaunch && this.pendingMulti === 0)
+      for (const b of this.balls)
+        if (b.x > 4.6 && b.y < PlungerY + 0.6 && Math.hypot(b.vx, b.vy) < 0.6) { this.needLaunch = true; break; }
 
     // drains
     for (const b of this.balls) {
@@ -638,8 +643,8 @@ function side(t: Trig, x: number, y: number) {
 export interface PinBotLevel { delay: number; jitter: number; miss: number; aim: boolean }
 export const PinBotLevels: PinBotLevel[] = [
   { delay: 0.07, jitter: 0.09, miss: 0.18, aim: false },
-  { delay: 0.03, jitter: 0.05, miss: 0.06, aim: false },
-  { delay: 0.0, jitter: 0.015, miss: 0.0, aim: true },
+  { delay: 0.04, jitter: 0.06, miss: 0.1, aim: false },
+  { delay: 0.0, jitter: 0.015, miss: 0.0, aim: false },
 ];
 
 /** Computer player: flips when the ball is over a flipper's sweet spot and plunges with a strong pull. */
