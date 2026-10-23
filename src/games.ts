@@ -22,6 +22,36 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "wallblocks",
+    name: "Block Drop Wall",
+    tagline: "Throw to steer the falling blocks!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallblocks.webp",
+    feature: "img/features/wallblocks.webp",
+    description: "LiDAR wall activation: the brick-game handheld on a giant wall. Hit beside a falling block to nudge it, on top to rotate it, below to slam it; clear lines and send junk rows to your rival. Solo, vs a virtual stacker, or two players on a split wall.",
+    component: load(() => import("./games/wallblocks")),
+  },
+  {
+    id: "walltictac",
+    name: "Ball Tic-Tac-Toe",
+    tagline: "Hit a square to claim it!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/walltictac.webp",
+    feature: "img/features/walltictac.webp",
+    description: "LiDAR wall activation: the notebook game on a giant chalkboard. Throw at a square to claim it, waste a throw on a taken one, get three in a row. Best of three against a friend or a virtual player, or beat the clock solo.",
+    component: load(() => import("./games/walltictac")),
+  },
+  {
+    id: "wallbombs",
+    name: "Bomb Defuse",
+    tagline: "Hit the bombs before the fuse runs out!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallbombs.webp",
+    feature: "img/features/wallbombs.webp",
+    description: "LiDAR wall activation: cartoon bombs pop up with burning fuses; hit your colour to defuse them before they blow. Big bombs take two hits, golden ones pay big. Solo with three lives, vs a virtual defuser, or two players.",
+    component: load(() => import("./games/wallbombs")),
+  },
+  {
     id: "walllagori",
     name: "Lagori",
     tagline: "Knock it down. Build it back!",

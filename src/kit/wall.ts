@@ -41,15 +41,16 @@ function install() {
     const el = Screen.el;
     if (!el || !(e.target instanceof Node) || !el.contains(e.target)) return;
     const screen = clientToScreen(e.clientX, e.clientY);
-    if (overUI(screen)) return;
     const now = performance.now();
+    // Any press is activity for the attract loop, including balls on buttons or the result screen.
+    lastHitAt = now;
+    if (overUI(screen)) return;
     const u = screen.x / Math.max(1, Screen.width), v = screen.y / Math.max(1, Screen.height);
     while (recent.length && now - recent[0].time > MERGE_MS) recent.shift();
     if (recent.some((h) => Math.hypot(h.u - u, (h.v - v) * Screen.height / Math.max(1, Screen.width)) < MERGE_DIST)) return;
     const hit: WallHit = { screen, world: screenToWorld(screen), side: u < 0.5 ? 0 : 1, u, v, time: now };
     recent.push(hit);
     pending.push(hit);
-    lastHitAt = now;
   }, { capture: true });
 }
 
@@ -61,7 +62,7 @@ export const WallHits = {
   },
   /** Drop hits that arrived while nothing was listening (for example during a countdown). */
   clear() { install(); pending.length = 0; },
-  /** Seconds since the last ball hit: use it to fall back to an attract loop when the wall is left alone. */
+  /** Seconds since the last press anywhere on the game, UI included: use it to fall back to an attract loop when the wall is left alone. */
   get idleSeconds() { install(); return (performance.now() - lastHitAt) / 1000; },
   /** Test helper: inject a hit at a 0..1 wall position (0,0 = bottom left) as if a ball landed there. */
   simulate(u: number, v: number) {
