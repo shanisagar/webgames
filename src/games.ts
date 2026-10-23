@@ -22,6 +22,36 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "wallkeeper",
+    name: "Goalkeeper Save",
+    tagline: "Hit the shot with your ball. Make the save!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallkeeper.webp",
+    feature: "img/features/wallkeeper.webp",
+    description: "LiDAR wall activation: a projected striker shoots at your goal and you block each shot by throwing your ball at it. Curlers, lobs and double strikers as the round goes on. Solo, vs a virtual keeper, or two players on a split wall.",
+    component: load(() => import("./games/wallkeeper")),
+  },
+  {
+    id: "wallhockey",
+    name: "Air Hockey Wall",
+    tagline: "Throw at the puck. Smash it into their goal!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallhockey.webp",
+    feature: "img/features/wallhockey.webp",
+    description: "LiDAR wall activation: a neon rink fills the wall and a ball landing near the puck drives it away, harder the closer you hit. First to five, golden goal on a tie. Solo against a moving goalie, vs a virtual striker, or two players.",
+    component: load(() => import("./games/wallhockey")),
+  },
+  {
+    id: "walldodge",
+    name: "Dodgeball Dash",
+    tagline: "Step left, step right: don't get bonked!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/walldodge.webp",
+    feature: "img/features/walldodge.webp",
+    description: "LiDAR wall activation with a floor lane: a floor sensor tracks your feet and your avatar dodges dodgeballs, beach balls and noodles falling down the wall. Survive as long as you can, race a virtual runner, or go head to head.",
+    component: load(() => import("./games/walldodge")),
+  },
+  {
     id: "molesmash",
     name: "Mole Smash",
     tagline: "Bonk them before they duck!",
