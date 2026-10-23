@@ -1,4 +1,4 @@
-import { OnlineRoom, RoomStatus } from "../../kit";
+import { OnlineRoom, type RoomStatus } from "./online";
 
 /**
  * Game-agnostic match protocol on top of the kit's OnlineRoom (pilot for other turn-based games).

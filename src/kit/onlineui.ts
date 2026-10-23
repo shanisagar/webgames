@@ -1,7 +1,10 @@
-import {
-  ArcadeButton, Art, Color, Ease, Image, Keyboard, Mathf, OnlineRoom, Pal, ROOM_CODE_LENGTH, Sfx, Snd, tableInviteUrl, Text, Time, UI, UIKit,
-  UINode, V2, V3,
-} from "../../kit";
+import { Art } from "./art";
+import { Keyboard } from "./input";
+import { Color, Ease, Mathf, Pal, V2, V3 } from "./math";
+import { OnlineRoom, ROOM_CODE_LENGTH, tableInviteUrl } from "./online";
+import { Time } from "./scene";
+import { Sfx, Snd } from "./sfx";
+import { ArcadeButton, Image, Text, UI, UIKit, UINode } from "./ui";
 
 /**
  * Reusable screens for private online tables (pilot for other games): the PRIVATE TABLE lobby (create / join with

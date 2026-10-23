@@ -1,10 +1,8 @@
 import {
   AdService, ArcadeButton, ArcadeGame, Art, AudioClip, CasualArt, CasualFx, CasualLook, Color, Ease, Fmt, Fx, GameInfo, GameObject, howTo, Image,
-  Mathf, Mouse, OnlineRoom, overUI, Pal, Phase, Random, Result, Screen, Sfx, Snd, SpriteRenderer, tableCodeFromUrl, TapPointer, Text, TextAnchor, Time,
+  Mathf, Mouse, OnlineLink, OnlineRoom, overUI, Pal, Phase, Random, Result, Screen, Sfx, Snd, SpriteRenderer, tableCodeFromUrl, TableLobby, TableOverlay, TapPointer, Text, TextAnchor, Time,
   TouchScheme, UIKit, UINode, V2, V3,
 } from "../../kit";
-import { OnlineLink } from "./OnlineLink";
-import { TableLobby, TableOverlay } from "./OnlineUI";
 import { CoinSprite, DotSprite, DoodleCount, DoodleSprite, Gold, HatchSprite, InkDrop, Panel, Papers, PaperSprite, SheetShadow, StrokeSprite } from "./DotsArt";
 import { Board, DotsBot, makePuzzle, Puzzle } from "./DotsEngine";
 

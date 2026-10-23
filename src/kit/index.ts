@@ -9,6 +9,8 @@ export * from "./fx";
 export * from "./input";
 export * from "./wall";
 export * from "./online";
+export * from "./onlinelink";
+export * from "./onlineui";
 export * from "./ads";
 export * from "./ui";
 export * from "./shell";
