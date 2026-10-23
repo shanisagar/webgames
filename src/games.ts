@@ -22,6 +22,26 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "paddleduel",
+    name: "Paddle Duel",
+    tagline: "The original duel, turned up to neon.",
+    genre: "Arcade",
+    icon: "img/icons/paddleduel.webp",
+    feature: "img/features/paddleduel.webp",
+    description: "The classic two-paddle game in glowing neon: angle and spin your returns as the ball speeds up every rally, first to seven. Keep a rally alive in Wall Pong, beat three CPU paddles, or face a friend side by side or across a tabletop screen.",
+    component: load(() => import("./games/paddleduel")),
+  },
+  {
+    id: "cashrocket",
+    name: "Cash-Out Rocket",
+    tagline: "How high dare you ride it?",
+    genre: "Arcade",
+    icon: "img/icons/cashrocket.webp",
+    feature: "img/features/cashrocket.webp",
+    description: "A nerve game played for points: the rocket's multiplier climbs until it crashes at a random moment. Cash out in time to bank your points, wait too long and the round scores zero. Five rounds solo, against a cunning CPU, or with a friend on one screen, with a shield to grab once a match.",
+    component: load(() => import("./games/cashrocket")),
+  },
+  {
     id: "kiteclash",
     name: "Kite Clash",
     tagline: "Hold to pull. Cross strings. Cut them down!",
