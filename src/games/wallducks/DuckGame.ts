@@ -45,6 +45,7 @@ export class DuckGame extends WallGame {
   private bulbs: SpriteRenderer[] = [];
   private brandBoard!: SpriteRenderer;
   private brandText!: TextMesh;
+  private brandPosts: SpriteRenderer[] = [];
   private otter!: SpriteRenderer;
   private sign!: SpriteRenderer;
   private signText!: TextMesh;
@@ -113,6 +114,7 @@ export class DuckGame extends WallGame {
     for (let i = 0; i < 12; i++) this.cabins.push(Art.spr(r, "Cabin", DuckArt.Cabin(), Pal.hex(cabCols[i % cabCols.length]), 0.9, -870, Art.Flat));
     for (let i = 0; i < 4; i++) this.tents.push(Art.spr(r, "Tent", DuckArt.Tent(i), Color.white, 4.4, -865 + i, Art.Flat));
     this.brandBoard = Art.spr(r, "BrandBoard", Art.RoundSquare, this.BrandColor, 1, -860, Art.Flat);
+    for (let i = 0; i < 2; i++) this.brandPosts.push(Art.spr(r, "BrandPost", Art.Square, Pal.hex(0x7a4a2a), 1, -861, Art.Flat));
     this.brandText = child(r, "BrandText", new TextMesh());
     this.brandText.sortingOrder = -859;
     for (let i = 0; i < 4; i++) this.backReeds.push(Art.spr(r, "ReedsBack", DuckArt.Reeds(0), Color.white, 1, -500, Art.Flat));
@@ -226,7 +228,9 @@ export class DuckGame extends WallGame {
     const len = this.BrandName.length;
     this.brandText.fontSize = 64; this.brandText.characterSize = Math.min(0.75, 7 / Math.max(4, len)) * 10 / 64;
     this.brandText.color = Color.white;
-    this.brandBoard.transform.localScale = new V3(Math.min(9, 1.6 + len * Math.min(0.75, 7 / Math.max(4, len)) * 0.62), 1.3, 1);
+    const bw = Math.min(9, 1.6 + len * Math.min(0.75, 7 / Math.max(4, len)) * 0.62);
+    this.brandBoard.transform.localScale = new V3(bw, 1.3, 1);
+    this.brandPosts.forEach((p, i) => { p.transform.localPosition = new V3(-1.2 + (i === 0 ? -1 : 1) * (bw / 2 - 0.5), -2.6, 0); p.transform.localScale = new V3(0.18, 2.2, 1); });
   }
 
   private Hide(d: Duck) { d.state = "gone"; for (const g of [d.sr, d.glow, d.shadow]) g.gameObject.setActive(false); }

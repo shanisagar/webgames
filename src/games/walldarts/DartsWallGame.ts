@@ -15,7 +15,7 @@ import * as DA from "./DartsArt";
 
 const Darts = 10, RoundSecs = 120;
 /** Virtual thrower: spread (1 sigma, world units) and where it aims. */
-const BotSigma = [2.0, 1.25, 0.75];
+const BotSigma = [3.2, 1.0, 0.6];
 
 interface Board {
   root: GameObject; cab: SpriteRenderer; board: SpriteRenderer; glow: SpriteRenderer; nums: TextMesh[];

@@ -104,13 +104,6 @@ export const DuckArt = {
       if (p.y < -0.23) return c; // keep the bottom edge clear (the texture may wrap)
       if (p.y < h1) c = Color.lerp(C(0x8fcf8a), C(0x6db87a), smooth(h1, h1 - 0.1, p.y));
       if (p.y < h2) c = Color.lerp(C(0x5aae6a), C(0x48985a), smooth(h2, -0.25, p.y));
-      // trees on the far hill
-      for (let i = 0; i < 9; i++) {
-        const tx = -0.9 + i * 0.22 + 0.05 * Math.sin(i * 7), ty = -0.05 + 0.08 * Math.sin(tx * 2.1 + 1) + 0.05 * Math.sin(tx * 5.3);
-        const d = CasualArt.sdCircle(p, new V2(tx, ty + 0.03), 0.035);
-        const ta = fill(d, 0.006);
-        if (ta > 0 && p.y > h2) c = CasualArt.over(c, C(0x3f8a50), ta);
-      }
       return c;
     });
   },

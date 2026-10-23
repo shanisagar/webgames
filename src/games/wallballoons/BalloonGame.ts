@@ -105,7 +105,7 @@ export class BalloonGame extends WallGame {
 
   protected BuildWorld() {
     const r = this.root;
-    this.sky = CasualLook.cover(r, CasualArt.gradient(Pal.hex(0x2a1050), Pal.hex(0x6a2a8a), Pal.hex(0xffb0e0).withAlpha(0.35)), -900);
+    this.sky = CasualLook.cover(r, CasualArt.gradient(Pal.hex(0x1a1428), Pal.hex(0x3a2a50), Pal.hex(0xffd0a0).withAlpha(0.25)), -900);
     for (let i = 0; i < 6; i++) this.back.push(Art.spr(r, "Stripes", BalloonArt.Stripes(), Color.white, 1, -880, Art.Flat));
     for (let i = 0; i < 6; i++) this.valance.push(Art.spr(r, "Valance", BalloonArt.Valance(), Color.white, 1, 500, Art.Flat));
     for (let i = 0; i < 26; i++) this.bulbs.push(Art.spr(r, "Bulb", Art.Disc, Pal.hex(0xfff2b0), 0.3, 502, Art.Flat));

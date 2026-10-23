@@ -61,6 +61,8 @@ function balloonPixel(p: V2, base: Color, px: number, kind: Special): Color {
   col = Color.lerp(col, Color.white, spec * 0.85);
   const spec2 = smooth(0.1, 0, Math.hypot((q.x + 0.15) * 1.0, (q.y - 0.68) * 1.6));
   col = Color.lerp(col, Color.white, spec2 * 0.7);
+  // thin light rim so every colour reads against the dark stall
+  col = Color.lerp(col, Color.white, smooth(0.9, 0.99, r) * 0.55);
   return CasualArt.over(c, col.withAlpha(kind === Special.Ice ? 0.92 : 1), a);
 }
 
@@ -84,7 +86,7 @@ export const BalloonArt = {
   Stripes(): Sprite {
     return CasualArt.make("bb-stripes", 256, 256, (p) => {
       const s = Mathf.repeat(p.x * 3, 1) < 0.5;
-      let c = s ? C(0x5a2a8a) : C(0x7a3aa8);
+      let c = s ? C(0x241c34) : C(0x31283f);
       const fold = Math.abs(Mathf.repeat(p.x * 3, 0.5) * 2 - 0.5);
       c = Color.lerp(c, CasualArt.darken(c, 0.3), smooth(0.3, 0.5, fold) * 0.4);
       c = Color.lerp(c, CasualArt.darken(c, 0.35), smooth(0.2, 1, p.y) * 0.5);

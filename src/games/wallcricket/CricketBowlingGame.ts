@@ -19,7 +19,7 @@ const Ground = -6.2, StumpH = 5.0, StumpW = 0.42, StumpGap = 1.18, StumpHalf = 1
 const BodyH = 6.8, BodyCY = Ground + 3.35, BatLen = 3.6;
 const OutSecs = 1.7;
 /** Virtual bowler: spread (1 sigma) and seconds between balls per difficulty. */
-const BotSigma = [2.1, 1.45, 1.0], BotEvery = [3.0, 2.3, 1.8];
+const BotSigma = [2.6, 1.7, 1.1], BotEvery = [3.4, 2.5, 1.9];
 const Shirts = [P1, P2, Pal.hex(0x2fa86a)];
 
 enum Bat { Guard, Defend, Swing, Out, WalkIn }
@@ -425,7 +425,7 @@ export class CricketBowlingGame extends WallGame {
   protected MakeResult() {
     const a = this.sides[0], b = this.sides[1];
     const score = (s: Side) => s.wkts * 1000 + Math.min(999, s.runs);
-    const stars = (s: Side) => WallGame.Stars(s.wkts, 4, 9, 15);
+    const stars = (s: Side) => WallGame.Stars(s.wkts, 5, 10, 16);
     const stats = (s: Side): [string, string][] => [["WICKETS", String(s.wkts)], ["RUNS", String(s.runs)], ["BALLS", `${s.balls} (${this.Overs(s.balls)})`], ["HAT-TRICKS", String(s.hatTricks)]];
     if (this.mode === Mode.Solo) {
       const nb = this.SaveBest(score(a));
