@@ -22,6 +22,36 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "walllagori",
+    name: "Lagori",
+    tagline: "Knock it down. Build it back!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/walllagori.webp",
+    feature: "img/features/walllagori.webp",
+    description: "LiDAR wall activation: the seven-stones street game. Knock the stack over with a ball, then hit the scattered stones largest first to rebuild it while the tagger tries to block you. Solo stacks, vs a virtual rival, or first-to-rebuild for two players.",
+    component: load(() => import("./games/walllagori")),
+  },
+  {
+    id: "wallducks",
+    name: "Duck Shoot",
+    tagline: "Hit the flying ducks!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallducks.webp",
+    feature: "img/features/wallducks.webp",
+    description: "LiDAR wall activation: the fairground duck shoot with a soft ball. Flocks fly in lines, waves, loops and zig-zags across the marsh; hit them first, chase the crowned golden duck for 5. Solo, vs a virtual hunter, or two players.",
+    component: load(() => import("./games/wallducks")),
+  },
+  {
+    id: "wallballoons",
+    name: "Balloon Burst",
+    tagline: "Pop your colour. Skip the rest!",
+    genre: "LiDAR Wall",
+    icon: "img/icons/wallballoons.webp",
+    feature: "img/features/wallballoons.webp",
+    description: "LiDAR wall activation: the fair balloon stall. Pop the called colour and avoid the rest, grab the brand balloon for 5, freeze everything with ice or clear a cluster with a bomb. Solo, vs a virtual popper, or two players with a colour each.",
+    component: load(() => import("./games/wallballoons")),
+  },
+  {
     id: "wallhoops",
     name: "Hoop Shootout",
     tagline: "Throw it in the moving hoop!",
