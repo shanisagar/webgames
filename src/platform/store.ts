@@ -139,7 +139,13 @@ const DEMO: ClientRecord[] = [
 export function localClients(): ClientRecord[] {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
-    if (raw) return JSON.parse(raw) as ClientRecord[];
+    if (raw) {
+      const list = JSON.parse(raw) as ClientRecord[];
+      // The built-in "demo" portal shows every game: games added after this browser saved its copy are switched on.
+      const demo = list.find((c) => c.slug === "demo");
+      if (demo) for (const g of GAMES) if (!demo.games.some((x) => x.game_id === g.id)) demo.games.push({ game_id: g.id, enabled: true, sort: demo.games.length });
+      return list;
+    }
   } catch { /* storage blocked: fall back to the demo data */ }
   return DEMO;
 }
