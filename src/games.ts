@@ -22,6 +22,16 @@ export interface GameEntry {
 /** Newest first. Each game lives in src/games/<id>/ and is reachable at #/<id>. */
 export const GAMES: GameEntry[] = [
   {
+    id: "kiteclash",
+    name: "Kite Clash",
+    tagline: "Hold to pull. Cross strings. Cut them down!",
+    genre: "Action",
+    icon: "img/icons/kiteclash.webp",
+    feature: "img/features/kiteclash.webp",
+    description: "The rooftop kite-fighting festival: hold to pull your fighter kite where its nose points, cross strings and saw away to cut rivals down while wind, birds and glass-string charms change the fight. Two-minute Sky Festival, a daily sky, best-of-3 duels against three CPU flyers, or a friend on the same screen.",
+    component: load(() => import("./games/kiteclash")),
+  },
+  {
     id: "toprumble",
     name: "Top Rumble",
     tagline: "Pull the string. Last top spinning wins.",

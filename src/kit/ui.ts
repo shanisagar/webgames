@@ -593,6 +593,9 @@ export class ArcadeButton {
   private scale = 1;
   private clock = 0;
   private _interactable = true;
+  /** The press started on this button. A tap that began on the game (say, holding a kite) and ends after a result
+   *  screen pops up under the finger is otherwise reported by mobile browsers as a click on the new button. */
+  private armed = false;
   private accent = Pal.Cyan;
   private readonly tick = () => this.update();
 
@@ -600,10 +603,16 @@ export class ArcadeButton {
     node.button = this;
     const el = node.el;
     el.classList.add("na-button");
-    el.addEventListener("pointerdown", (e) => { this.held = true; if (this._interactable) this.target = 0.93; e.stopPropagation(); });
+    el.addEventListener("pointerdown", (e) => { this.held = true; this.armed = true; if (this._interactable) this.target = 0.93; e.stopPropagation(); });
     el.addEventListener("pointerup", () => { this.held = false; this.target = 1; });
     el.addEventListener("pointerleave", () => { this.held = false; this.target = 1; });
-    el.addEventListener("click", (e) => { e.stopPropagation(); this.press(); });
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // detail 0 = a keyboard or programmatic click, which has no pointer press.
+      if (!this.armed && e.detail !== 0) return;
+      this.armed = false;
+      this.press();
+    });
     UITicks.add(this.tick);
   }
   get gameObject() { return this.node; }
