@@ -60,6 +60,7 @@ body { background: #0b0d17; color: #e7e9f3; font-family: "Rajdhani", system-ui, 
 .site-card img { flex: none; width: 88px; height: 88px; border-radius: 20px; }
 .site-card h3 { margin: 0; font: 800 19px/1.15 var(--font); }
 .site-genre { display: inline-block; margin: 4px 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.site-online { display: inline-block; margin: 4px 0 6px 8px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #04110a; background: #3ddc97; }
 .site-card p { margin: 0; font-size: 14px; line-height: 1.35; opacity: 0.7; }
 .site-empty { opacity: 0.6; }
 .site-foot { padding: 40px 16px 32px; text-align: center; font-size: 14px; opacity: 0.55; }

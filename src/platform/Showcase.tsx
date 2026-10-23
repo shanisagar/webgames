@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { GameEntry } from "../games";
-import { WALL_GENRE } from "./categories";
+import { ONLINE_CATEGORY, WALL_GENRE } from "./categories";
 import { updateManifest } from "./manifest";
 import type { ClientTheme } from "../kit/theme";
 
@@ -62,9 +62,9 @@ export function Showcase({ games, brand, playable = true }: { games: GameEntry[]
   // LiDAR wall activations get their own section below; the main grid, its genre chips and search cover the rest.
   const wall = games.filter((g) => g.genre === WALL_GENRE);
   const touch = games.filter((g) => g.genre !== WALL_GENRE);
-  const genres = useMemo(() => ["All", ...new Set(touch.map((g) => g.genre))], [touch]);
+  const genres = useMemo(() => ["All", ...(touch.some((g) => g.online) ? [ONLINE_CATEGORY] : []), ...new Set(touch.map((g) => g.genre))], [touch]);
   const shown = touch.filter((g) =>
-    (genre === "All" || g.genre === genre) &&
+    (genre === "All" || g.genre === genre || (genre === ONLINE_CATEGORY && g.online)) &&
     (!query || `${g.name} ${g.genre} ${g.tagline}`.toLowerCase().includes(query.toLowerCase())));
   const recentGames = !playable ? [] : recent().map((id) => games.find((g) => g.id === id)).filter((g): g is GameEntry => !!g).slice(0, 6);
   const featured = games.filter((g) => g.feature).slice(0, 5);
@@ -136,6 +136,7 @@ export function Showcase({ games, brand, playable = true }: { games: GameEntry[]
               <div>
                 <h3>{g.name}</h3>
                 <span className="site-genre">{g.genre}</span>
+                {g.online && <span className="site-online">Online</span>}
                 <p>{g.tagline}</p>
               </div>
             </a>

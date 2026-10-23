@@ -10,6 +10,8 @@ export interface GameEntry {
   name: string;
   tagline: string;
   genre: string;
+  /** Has private online tables (two devices joined by a code); listed under the "Online multiplayer" category. */
+  online?: boolean;
   /** Square store icon (256px). */
   icon: string;
   /** Wide feature graphic (1024x500) for the showcase hero, when the game has one. */

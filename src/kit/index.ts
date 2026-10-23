@@ -8,6 +8,7 @@ export * from "./prefs";
 export * from "./fx";
 export * from "./input";
 export * from "./wall";
+export * from "./online";
 export * from "./ads";
 export * from "./ui";
 export * from "./shell";

@@ -44,6 +44,10 @@ jobs:
       # Dev preview: the dev branch with every game folder playable at #/dev. Never blocks the live site.
       - name: Build dev preview
         continue-on-error: true
+        # Realtime only (online private tables across devices); the dev back office stays in local demo mode.
+        env:
+          VITE_REALTIME_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_REALTIME_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: |
           git fetch --depth=1 origin dev || { echo "No dev branch: skipping."; exit 0; }
           git worktree add ../devsrc FETCH_HEAD
