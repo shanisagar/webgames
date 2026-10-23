@@ -1,7 +1,7 @@
 import {
   ArcadeButton, ArcadeGame, Art, AudioClip, CasualFx, CasualLook, Color, Fmt, Fx, GameInfo, GameObject, howTo, Keyboard,
-  LineRenderer, LoopSource, Mathf, Mouse, overUI, Pal, Phase, Result, Screen, Sfx, Snd, SpriteRenderer, Text, TextAnchor, Time,
-  Touchscreen, TouchScheme, UIKit, UINode, V2, V3,
+  LineRenderer, LoopSource, Mathf, Mouse, OnlineLink, OnlineRoom, overUI, Pal, Phase, Result, Screen, Sfx, Snd, SpriteRenderer,
+  tableCodeFromUrl, TableLobby, TableOverlay, Text, TextAnchor, Time, Touchscreen, TouchScheme, UIKit, UINode, V2, V3,
 } from "../../kit";
 import { BlockerSprite, GoldCoin, HoleGlow, MalletSprite, P1Col, P2Col, PuckCol, PuckSprite, RinkH, RinkSprite, RinkW } from "./HockeyArt";
 import { Ev, GoalHalf, HL, HockeyAI, HockeyEvent, HockeyLevels, HW, MaxPuck, RM, RP, Rink } from "./HockeyPhysics";
@@ -14,7 +14,20 @@ import { Ev, GoalHalf, HL, HockeyAI, HockeyEvent, HockeyLevels, HW, MaxPuck, RM,
  */
 
 const Gold = Pal.hex(0xffc93c), Red = Pal.hex(0xff4a5a), Ink = Pal.hex(0x05060f), White = Pal.hex(0xe8eeff);
-const ModeNames = ["SOLO", "VS CPU", "2 PLAYERS"];
+const ModeNames = ["SOLO", "VS CPU", "2 PLAYERS", "ONLINE"];
+const Online = 3;
+const OnlinePrize = 80;
+/** Online: the host runs the only simulation and streams this compact state (~20/s); the guest sends its target. */
+interface HStart { match: number }
+interface HState {
+  k: number; st: number; tm: number; cd: number; cl: number; sc: number[];
+  p: number[]; on: number; m: number[];
+  g: number; gg: number; h: number[][]; ov: number; mt: number; sh: number[]; top: number;
+  /** host clock (ms) when sent: the guest interpolates on the host's timeline */
+  t: number;
+}
+const SendEvery = 1 / 20, InputEvery = 1 / 30, InterpDelay = 0.1;
+const r2 = (v: number) => Math.round(v * 100) / 100;
 const MatchNames = ["FIRST TO 7", "2 MINUTES"];
 const DiffNames = ["EASY", "MEDIUM", "HARD"];
 const CpuNames = ["ROOKIE", "ACE", "LEGEND"];
@@ -56,6 +69,16 @@ export class AirHockeyGame extends ArcadeGame {
   private sideScore: Text[] = [];
   private soloText!: Text;
   private modeButton: ArcadeButton | null = null; private matchButton!: ArcadeButton; private diffButton!: ArcadeButton; private modeLabel!: Text;
+
+  // online
+  private lobby!: TableLobby; private overlay!: TableOverlay;
+  private link: OnlineLink<HStart, number, HState> | null = null;
+  private me = 0; private onlineMatch = 0; private onlineGo = false; private autoJoined = false; private forfeit = false; private ended = false;
+  private netK = 0; private sendAcc = 0; private inAcc = 0;
+  private goalId = 0; private hitId = 0; private hitLog: number[][] = [];
+  private buf: { at: number; s: HState }[] = []; private seenGoal = 0; private seenHit = 0; private lastStep = -1; private latest: HState | null = null;
+  private guestTarget: V2 | null = null;
+  private playT = 0;
 
   private hitClip: AudioClip[] = []; private wallClip!: AudioClip; private goalClip!: AudioClip; private humClip!: AudioClip; private postClip!: AudioClip;
   private hum: LoopSource | null = null;
@@ -135,6 +158,7 @@ export class AirHockeyGame extends ArcadeGame {
     this.BuildHud();
     this.BuildTitleExtras();
     this.BuildSounds();
+    this.BuildOnline();
     this.rink.placePuck(0, 0);
     this.Layout();
   }
@@ -187,7 +211,7 @@ export class AirHockeyGame extends ArcadeGame {
   private BuildTitleExtras() {
     const ex = this.UI.TitleExtra;
     if (!ex) return;
-    this.modeButton = UIKit.buttonAt(ex, "VS CPU", UIKit.Center, new V2(-330, 10), new V2(310, 104), false, () => this.Cycle("mode", 3), 30);
+    this.modeButton = UIKit.buttonAt(ex, "VS CPU", UIKit.Center, new V2(-330, 10), new V2(310, 104), false, () => this.Cycle("mode", 4), 30);
     this.matchButton = UIKit.buttonAt(ex, "FIRST TO 7", UIKit.Center, new V2(0, 10), new V2(310, 104), false, () => this.Cycle("match", 2), 28);
     this.diffButton = UIKit.buttonAt(ex, "MEDIUM", UIKit.Center, new V2(330, 10), new V2(310, 104), false, () => this.Cycle("diff", 3), 30);
     this.modeButton.setAccent(P1Col);
@@ -197,6 +221,8 @@ export class AirHockeyGame extends ArcadeGame {
     CasualLook.titleCard(this.UI, new Color(0.02, 0.02, 0.09, 0.72), new V2(1060, 1060), -10);
   }
 
+  private get SelMode() { return Mathf.clamp(this.Data.get("mode", 1), 0, 3); }
+
   private Cycle(key: string, n: number) {
     this.Data.set(key, (this.Data.get(key) + 1) % n);
     Sfx.play(Snd.Click, 0.6);
@@ -205,13 +231,14 @@ export class AirHockeyGame extends ArcadeGame {
 
   private RefreshTitle() {
     if (!this.modeButton) return;
-    const m = Mathf.clamp(this.Data.get("mode", 1), 0, 2), mt = Mathf.clamp(this.Data.get("match"), 0, 1), d = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
+    const m = this.SelMode, mt = Mathf.clamp(this.Data.get("match"), 0, 1), d = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
     if (this.modeButton.label) this.modeButton.label.text = ModeNames[m];
     if (this.matchButton.label) this.matchButton.label.text = m === 0 ? "90 SEC RUSH" : MatchNames[mt];
     if (this.diffButton.label) this.diffButton.label.text = m === 1 ? DiffNames[d] : "—";
     this.matchButton.interactable = m !== 0;
     this.diffButton.interactable = m === 1;
-    this.modeLabel.text = m === 0 ? "SCORE PAST THE SLIDING BLOCKERS: 90 SECONDS" : m === 1 ? `BEAT ${CpuNames[d]} AND WIN ${Prizes[d]} COINS` : "ONE PHONE, TWO PLAYERS: EACH OWNS A HALF";
+    this.modeLabel.text = m === 0 ? "SCORE PAST THE SLIDING BLOCKERS: 90 SECONDS" : m === 1 ? `BEAT ${CpuNames[d]} AND WIN ${Prizes[d]} COINS`
+      : m === Online ? `PLAY A FRIEND ON THEIR OWN PHONE · WIN ${OnlinePrize} COINS` : "ONE PHONE, TWO PLAYERS: EACH OWNS A HALF";
     this.UI.ShowTitle(this.BestLine(), this.StatsLine());
   }
 
@@ -223,7 +250,8 @@ export class AirHockeyGame extends ArcadeGame {
   private Layout() {
     if (!this.table) return;
     this.portrait = Screen.height > Screen.width;
-    this.tableRot = this.portrait ? 0 : -90;
+    // online guest: the rink turns half way round so their own goal is at the bottom (left in landscape)
+    this.tableRot = (this.portrait ? 0 : -90) + (this.mode === Online && this.me === 1 ? 180 : 0);
     const w = this.portrait ? RinkW : RinkH, h = this.portrait ? RinkH : RinkW;
     const r = this.portrait ? this.PlayRect(250, 40, 0.2) : this.PlayRect(170, 30, 0.2);
     this.tableScale = Math.min((r.xMax - r.xMin) / w, (r.yMax - r.yMin) / h);
@@ -236,6 +264,10 @@ export class AirHockeyGame extends ArcadeGame {
     this.board.place(new V2(0.5, 1), new V2(0, this.portrait ? -95 : -82), new V2(this.portrait ? 640 : 700, 130));
     this.wallet.place(new V2(0, 1), new V2(130, this.portrait ? -230 : -80), new V2(220, 64));
     const flip = this.mode === 2 && this.portrait;
+    if (this.overlay) {
+      if (this.portrait) this.overlay.place({ anchor: new V2(0.5, 0), pos: new V2(0, 60) }, { anchor: new V2(0.5, 1), pos: new V2(0, -300) });
+      else this.overlay.place({ anchor: new V2(0, 0), pos: new V2(270, 60) }, { anchor: new V2(0.5, 1), pos: new V2(0, -230) });
+    }
     for (let i = 0; i < 2; i++) {
       const p = this.UI.WorldToHud(this.TableToWorld(new V2(this.portrait ? HW * 0.55 : 0, (i === 0 ? -1 : 1) * HL * 0.25)));
       this.sideScore[i].rectTransform.anchoredPosition = p;
@@ -243,25 +275,29 @@ export class AirHockeyGame extends ArcadeGame {
     }
   }
 
+  /** Rotates by a multiple of 90 degrees (exact). */
+  private static Turn(x: number, y: number, deg: number) {
+    const q = ((Math.round(deg / 90) % 4) + 4) % 4;
+    return q === 0 ? new V2(x, y) : q === 1 ? new V2(-y, x) : q === 2 ? new V2(-x, -y) : new V2(y, -x);
+  }
+
   private TableToWorld(p: V2) {
-    let x = p.x, y = p.y;
-    if (this.tableRot !== 0) { const t = x; x = y; y = -t; }
+    const t = AirHockeyGame.Turn(p.x, p.y, this.tableRot);
     const lp = this.table.localPosition;
-    return new V2(lp.x + x * this.tableScale, lp.y + y * this.tableScale);
+    return new V2(lp.x + t.x * this.tableScale, lp.y + t.y * this.tableScale);
   }
 
   private ScreenToTable(screen: V2) {
     const w = this.ScreenToWorld(screen);
     const lp = this.table.localPosition;
-    let x = (w.x - lp.x) / this.tableScale, y = (w.y - lp.y) / this.tableScale;
-    if (this.tableRot !== 0) { const t = x; x = -y; y = t; }
-    return new V2(x, y);
+    return AirHockeyGame.Turn((w.x - lp.x) / this.tableScale, (w.y - lp.y) / this.tableScale, -this.tableRot);
   }
 
   // ------------------------------------------------------------------ lifecycle
 
   protected OnEnterTitle() {
-    this.mode = Mathf.clamp(this.Data.get("mode", 1), 0, 2);
+    this.LeaveTable();
+    this.mode = 1; this.me = 0; this.ended = false;
     this.rink = new Rink();
     this.rink.placePuck(0, 0, 9, 14);
     this.ai = null;
@@ -270,19 +306,32 @@ export class AirHockeyGame extends ArcadeGame {
     
     this.Layout();
     this.RefreshTitle();
+    // an invite link (?table=12345) opens the join panel and joins straight away
+    const code = tableCodeFromUrl();
+    if (code && !this.autoJoined) {
+      this.autoJoined = true;
+      this.Data.set("mode", Online);
+      this.RefreshTitle();
+      this.lobby.open("join", code);
+    }
   }
   private attract: HockeyAI[] = [];
 
   protected BeginRun() {
-    this.mode = Mathf.clamp(this.Data.get("mode", 1), 0, 2);
+    this.mode = this.SelMode;
     this.match = Mathf.clamp(this.Data.get("match"), 0, 1);
+    this.ended = false; this.forfeit = false; this.playT = 0;
+    if (this.mode === Online) {
+      this.me = this.link ? this.link.me : 0; this.match = this.onlineMatch;
+      this.buf = []; this.latest = null; this.seenGoal = 0; this.seenHit = 0; this.goalId = 0; this.hitId = 0; this.hitLog = []; this.netK = 0; this.lastStep = -1; this.guestTarget = null;
+    } else this.me = 0;
     this.diff = Mathf.clamp(this.Data.get("diff", 1), 0, 2);
     this.Data.add("games", 1);
     this.rink = new Rink();
     this.rink.events = [];
     this.rink.active = [true, this.mode !== 0];
     this.ai = this.mode === 1 ? new HockeyAI(HockeyLevels[this.diff], 1) : null;
-    this.score = [this.headStart ? 1 : 0, 0];
+    this.score = [this.headStart && this.mode === 1 ? 1 : 0, 0];
     if (this.headStart) this.UI.Toast("+1 GOAL HEAD START!", 2);
     this.headStart = false;
     this.clock = this.mode === 0 ? SoloTime : MatchTime;
@@ -293,7 +342,13 @@ export class AirHockeyGame extends ArcadeGame {
     this.trailPts = [];
     this.SetBlockers(this.mode === 0 ? 0 : -1);
     const names = this.Names();
-    for (let i = 0; i < 2; i++) { this.nameText[i].text = names[i]; this.mallets[i].root.setActive(this.mode !== 0 || i === 0); }
+    for (let i = 0; i < 2; i++) {
+      // the scoreboard's left slot is always "me"
+      const slot = this.Seat(i);
+      this.nameText[slot].text = names[i]; this.nameText[slot].color = PlayerCols[i];
+      UIKit.glow(this.scoreText[slot], PlayerCols[i], 4);
+      this.mallets[i].root.setActive(this.mode !== 0 || i === 0);
+    }
     for (let i = 0; i < 2; i++) { this.sideScore[i].gameObject.setActive(this.mode !== 0); this.scoreText[i].gameObject.setActive(true); }
     if (!this.hum) this.hum = Sfx.createLoop(this.humClip);
     Sfx.setIntensity(0.5);
@@ -303,7 +358,10 @@ export class AirHockeyGame extends ArcadeGame {
     this.UpdateHud();
   }
 
+  private Seat(i: number) { return this.mode === Online && this.me === 1 ? 1 - i : i; }
+
   private Names() {
+    if (this.mode === Online) return this.me === 0 ? ["YOU", "FRIEND"] : ["FRIEND", "YOU"];
     if (this.mode === 0) return ["GOALS", "STREAK"];
     if (this.mode === 1) return ["YOU", CpuNames[this.diff]];
     return ["PLAYER 1", "PLAYER 2"];
@@ -340,6 +398,8 @@ export class AirHockeyGame extends ArcadeGame {
 
   protected TickBackground(dt: number) {
     if (this.layoutFrames > 0) { this.layoutFrames--; this.Layout(); }
+    this.lobby.tick(Time.unscaledDeltaTime);
+    this.overlay.tick();
     if (this.State === Phase.Title && this.attract.length) {
       this.attract[0].update(this.rink, dt);
       this.attract[1].update(this.rink, dt);
@@ -353,9 +413,17 @@ export class AirHockeyGame extends ArcadeGame {
   protected TickRun(dt: number) {
     if (this.layoutFrames > 0) { this.layoutFrames--; this.Layout(); }
     this.soundsThisFrame = 0;
+    if (this.mode === Online) { this.OnlineTick(dt); return; }
     this.timer -= dt;
     this.ReadInput(dt);
     if (this.ai) this.ai.update(this.rink, dt);
+    this.Sim(dt);
+    this.UpdateHud();
+    this.Present(dt);
+  }
+
+  /** One frame of the match (local modes, and the online host). */
+  private Sim(dt: number) {
     const r = this.rink;
     switch (this.step) {
       case Step.Countdown: {
@@ -392,22 +460,22 @@ export class AirHockeyGame extends ArcadeGame {
       this.hum.volume = Mathf.moveTowards(this.hum.volume, 0.16 + 0.1 * Mathf.clamp01(sp / 30), dt);
       this.hum.pitch = 1 + 0.08 * Mathf.clamp01(sp / 40);
     }
-    this.UpdateHud();
-    this.Present(dt);
   }
 
   // ------------------------------------------------------------------ input (multi-touch: each finger drives the mallet on its half)
 
   private ReadInput(dt: number) {
     const r = this.rink;
-    const humans = this.mode === 2 ? [0, 1] : [0];
+    const self = this.mode === Online ? this.me : 0;
+    const humans = this.mode === 2 ? [0, 1] : [self];
     const touched = [false, false];
+    if (this.State === Phase.Paused) return;
     if (Touchscreen.present) {
       for (const t of Touchscreen.touches) {
         const id = t.touchId;
         if (t.press.wasPressedThisFrame && !overUI(t.position) && t.position.y < Screen.height * 0.93) {
           const tp = this.ScreenToTable(t.position);
-          const owner = this.mode === 2 ? (tp.y < 0 ? 0 : 1) : 0;
+          const owner = this.mode === 2 ? (tp.y < 0 ? 0 : 1) : self;
           let taken = false;
           for (const [, o] of this.touchOwner) if (o === owner) taken = true;
           if (!taken) this.touchOwner.set(id, owner);
@@ -423,23 +491,23 @@ export class AirHockeyGame extends ArcadeGame {
     }
     // mouse: player 1's mallet follows the pointer over the table
     // (Mouse.present only turns on after a press on the game element; a hovering mouse is enough here)
-    if (!touched[0]) {
+    if (!touched[self]) {
       const mp = Mouse.position;
       if (mp.sub(this.lastMouse).sqrMagnitude > 1) this.mouseActive = true;
       this.lastMouse = mp;
       if (this.mouseActive && !(Touchscreen.present && this.touchOwner.size > 0)) {
         const tp = this.ScreenToTable(mp);
-        if (Math.abs(tp.x) < HW + 3 && Math.abs(tp.y) < HL + 3) { r.m[0].tx = tp.x; r.m[0].ty = tp.y; touched[0] = true; }
+        if (Math.abs(tp.x) < HW + 3 && Math.abs(tp.y) < HL + 3) { r.m[self].tx = tp.x; r.m[self].ty = tp.y; touched[self] = true; }
       }
     }
     // keyboard: WASD for player 1, arrows for player 2 (or player 1 when alone)
     const key = (l: string, rr: string, u: string, d: string) => new V2((Keyboard.key(rr).isPressed ? 1 : 0) - (Keyboard.key(l).isPressed ? 1 : 0), (Keyboard.key(u).isPressed ? 1 : 0) - (Keyboard.key(d).isPressed ? 1 : 0));
     const k1 = key("KeyA", "KeyD", "KeyW", "KeyS"), k2 = key("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown");
-    const kb = [this.mode === 2 ? k1 : k1.add(k2), k2];
+    const kb = this.mode === 2 ? [k1, k2] : self === 0 ? [k1.add(k2), k2] : [k1, k1.add(k2)];
     for (const i of humans) {
       let k = kb[i];
-      if (this.tableRot !== 0) k = new V2(-k.y, k.x);
-      if (k.sqrMagnitude > 0) { this.mouseActive = i === 0 ? false : this.mouseActive; const m = r.m[i]; m.tx = m.x + k.x * 30 * dt * 2.2; m.ty = m.y + k.y * 30 * dt * 2.2; touched[i] = true; }
+      if (this.tableRot !== 0) k = AirHockeyGame.Turn(k.x, k.y, -this.tableRot);
+      if (k.sqrMagnitude > 0) { this.mouseActive = i === self ? false : this.mouseActive; const m = r.m[i]; m.tx = m.x + k.x * 30 * dt * 2.2; m.ty = m.y + k.y * 30 * dt * 2.2; touched[i] = true; }
       r.m[i].max = 90;
     }
   }
@@ -448,7 +516,11 @@ export class AirHockeyGame extends ArcadeGame {
 
   private HandleEvents() {
     const evs = this.rink.events!;
-    for (const e of evs) this.OnEvent(e);
+    for (const e of evs) {
+      this.OnEvent(e);
+      // online host: hits travel to the guest for sound and sparks (the last few ride along in every state)
+      if (this.mode === Online && e.type !== Ev.Goal && e.speed > 2) { this.hitLog.push([++this.hitId, e.type, e.a, r2(e.speed), r2(e.x), r2(e.y)]); if (this.hitLog.length > 4) this.hitLog.shift(); }
+    }
     evs.length = 0;
   }
 
@@ -474,6 +546,7 @@ export class AirHockeyGame extends ArcadeGame {
   private OnGoal(goal: number) {
     const r = this.rink;
     const scorer = goal === 0 ? 1 : 0;
+    if (this.mode === Online) { this.goalId++; this.lastGoal = goal; }
     const gp = new V2(0, goal === 0 ? -HL : HL);
     this.goalGlow[goal].color = PlayerCols[scorer].withAlpha(1);
     this.fx.confetti(gp, 50, 7, [PlayerCols[scorer], Color.white, Gold], 0.25);
@@ -506,12 +579,19 @@ export class AirHockeyGame extends ArcadeGame {
       return;
     }
     this.score[scorer]++;
-    const names = this.Names();
-    this.UI.Announce(this.mode === 1 ? (scorer === 0 ? "GOAL!" : `${names[1]} SCORES`) : `${names[scorer]} SCORES!`, PlayerCols[scorer], 1.3);
-    if (this.mode === 1 && scorer === 0) this.fxWorld.confetti(this.TableToWorld(gp), 30, 7, [P1Col, Gold, Color.white]);
+    this.GoalShout(scorer, gp);
     this.sidePop[scorer] = 1;
   }
   private sidePop = [0, 0];
+  private lastGoal = 0;
+
+  private GoalShout(scorer: number, gp: V2) {
+    const names = this.Names();
+    const mine = (this.mode === 1 || this.mode === Online) && scorer === this.me;
+    this.UI.Announce(this.mode === Online ? (mine ? "GOAL!" : "FRIEND SCORES") : this.mode === 1 ? (scorer === 0 ? "GOAL!" : `${names[1]} SCORES`) : `${names[scorer]} SCORES!`, PlayerCols[scorer], 1.3);
+    if (mine) this.fxWorld.confetti(this.TableToWorld(gp), 30, 7, [PlayerCols[scorer], Gold, Color.white]);
+    this.sidePop[scorer] = 1;
+  }
 
   private AfterGoal() {
     const won = this.mode !== 0 && this.match === 0 && Math.max(this.score[0], this.score[1]) >= WinGoals;
@@ -572,7 +652,7 @@ export class AirHockeyGame extends ArcadeGame {
   private UpdateHud() {
     const solo = this.mode === 0;
     for (let i = 0; i < 2; i++) {
-      this.scoreText[i].text = solo ? String(i === 0 ? this.score[0] : this.streak) : String(this.score[i]);
+      this.scoreText[this.Seat(i)].text = solo ? String(i === 0 ? this.score[0] : this.streak) : String(this.score[i]);
       this.sideScore[i].text = String(this.score[i]);
       this.sidePop[i] = Mathf.moveTowards(this.sidePop[i], 0, Time.deltaTime * 2);
       const s = 1 + 0.4 * this.sidePop[i];
@@ -586,9 +666,233 @@ export class AirHockeyGame extends ArcadeGame {
     this.walletText.text = Fmt.n(this.Coins);
   }
 
+  // ------------------------------------------------------------------ online (private tables, host-authoritative real time)
+
+  private BuildOnline() {
+    const theme = { accent: P1Col, accent2: P2Col, ink: Ink };
+    this.lobby = new TableLobby("airhockey", theme, {
+      onReady: (room) => this.OnTableReady(room),
+      toast: (t, sec) => this.UI.Toast(t, sec ?? 2),
+    }, "Air Hockey");
+    this.overlay = new TableOverlay(theme, () => { this.overlay.hide(); this.EnterTitle(); }, (k) => this.link?.react(k));
+    this.overlay.onTimeout = () => { this.link?.leave(); this.FriendLeft(); };
+  }
+
+  /** Online the match keeps running while the pause menu is open: the friend is still playing. */
+  update() {
+    super.update();
+    if (this.State === Phase.Paused && this.mode === Online && !this.ended) this.OnlineTick(Time.unscaledDeltaTime);
+  }
+
+  /** PLAY with ONLINE selected opens the lobby; REMATCH online asks the friend. */
+  protected StartRun() {
+    if (this.State === Phase.Paused && this.mode === Online) { this.UI.Toast("Restart isn't available online: use MENU to leave the table.", 2.5); return; }
+    if (this.SelMode === Online && !this.onlineGo) {
+      if (this.State === Phase.Over && this.link && this.link.connected) { this.overlay.waitingRematch(); this.link.askRematch(); return; }
+      if (this.State === Phase.Over) this.EnterTitle();
+      if (!this.lobby.isOpen) {
+        this.lobby.createNote = `Your table plays ${MatchNames[Mathf.clamp(this.Data.get("match"), 0, 1)]} (change it on the title screen).`;
+        this.lobby.open("menu");
+      }
+      return;
+    }
+    this.onlineGo = false;
+    super.StartRun();
+  }
+
+  private OnTableReady(room: OnlineRoom) {
+    this.LeaveTable();
+    const link = new OnlineLink<HStart, number, HState>(room);
+    this.link = link;
+    room.onMessage((d) => this.OnNet(d as { t: string; s?: HState; x?: number; y?: number }));
+    const begin = (mt: number) => { this.onlineMatch = mt; this.overlay.hide(); this.Data.set("mode", Online); this.onlineGo = true; this.StartRun(); };
+    link.bind({
+      onStart: (st) => begin(st.match),
+      validMove: () => false,
+      onMove: () => {},
+      snapshot: () => this.MakeState(),
+      onSnapshot: (snap) => {
+        if ((this.State === Phase.Playing || this.State === Phase.Paused) && this.mode === Online) { this.OnState(snap); return; }
+        if (this.State === Phase.Over || snap.ov) return;
+        // joined (again) in the middle of a match: pick it up from the host's state
+        begin(snap.mt);
+        this.OnState(snap);
+      },
+      onReaction: (k) => this.overlay.Pop(k, true),
+      onFriend: (st) => {
+        if (st === "connected") { if (this.overlay.state === "lost") { this.overlay.hide(); this.UI.Toast("Your friend is back!", 2); } }
+        else if (st === "lost") { if (this.State !== Phase.Title && !this.ended) this.overlay.lost(30); }
+        else this.FriendLeft();
+      },
+      onRematchReady: () => { if (link.isHost) link.start({ match: this.match }); },
+      onFriendRematch: () => { if (this.overlay.state !== "rematch") this.UI.Toast("Your friend wants a rematch! Tap REMATCH.", 3); },
+    });
+    if (link.isHost) link.start({ match: Mathf.clamp(this.Data.get("match"), 0, 1) });
+    else this.UI.Toast("Joined! Waiting for the host to start…", 3);
+  }
+
+  private OnlineTick(dt: number) {
+    this.overlay.tick();
+    this.overlay.showBar(!this.ended);
+    const r = this.rink;
+    if (this.me === 0) {
+      // host: the only simulation; frozen while the friend is away
+      this.timer -= dt;
+      this.ReadInput(dt);
+      if (this.guestTarget) { r.m[1].tx = this.guestTarget.x; r.m[1].ty = this.guestTarget.y; r.m[1].max = 90; }
+      if (!this.overlay.busy && !this.ended) { this.playT += dt; this.Sim(dt); }
+      this.sendAcc += Time.unscaledDeltaTime;
+      if (this.sendAcc >= SendEvery) { this.sendAcc = 0; this.SendState(); }
+    } else {
+      // guest: my mallet is predicted here from my own input; the puck and the host's mallet come from the host
+      this.ReadInput(dt);
+      this.inAcc += Time.unscaledDeltaTime;
+      if (this.inAcc >= InputEvery && this.link) { this.inAcc = 0; this.link.room.send({ t: "hi", x: r2(r.m[1].tx), y: r2(r.m[1].ty) }); }
+      const on = r.puckOn; r.puckOn = false; r.step(dt); r.puckOn = on;
+      this.Interpolate();
+      if (this.hum) this.hum.volume = Mathf.moveTowards(this.hum.volume, 0.16 + 0.1 * Mathf.clamp01(Math.hypot(r.vx, r.vy) / 30), dt);
+    }
+    this.UpdateHud();
+    this.Present(dt);
+  }
+
+  private MakeState(): HState {
+    const r = this.rink;
+    return {
+      k: ++this.netK, st: this.step, tm: r2(this.timer), cd: this.counting ? 1 : 0, cl: r2(this.clock), sc: [...this.score],
+      p: [r2(r.px), r2(r.py), r2(r.vx), r2(r.vy)], on: r.puckOn ? 1 : 0, m: [r2(r.m[0].x), r2(r.m[0].y), r2(r.m[1].x), r2(r.m[1].y)],
+      g: this.goalId, gg: this.lastGoal, h: this.hitLog.slice(), ov: this.ended ? 1 : 0, mt: this.match, sh: [...this.shots], top: r2(this.topSpeed),
+      t: Math.round(performance.now()),
+    };
+  }
+
+  private SendState() { this.link?.room.send({ t: "hs", s: this.MakeState() }); }
+
+  private OnNet(d: { t: string; s?: HState; x?: number; y?: number }) {
+    if (!d || this.mode !== Online || this.State === Phase.Title) return;
+    if (d.t === "hi" && this.me === 0 && Number.isFinite(d.x) && Number.isFinite(d.y)) this.guestTarget = new V2(d.x!, d.y!);
+    else if (d.t === "hs" && this.me === 1 && d.s) this.OnState(d.s);
+  }
+
+  /** Guest: a state from the host (buffered for interpolation; events and score apply at once). */
+  private OnState(s: HState) {
+    if (this.me !== 1) return;
+    const first = !this.latest;
+    if (this.latest && s.k <= this.latest.k && s.k > 0 && this.latest.k - s.k < 1000) return;
+    const now = performance.now(), ht = s.t ?? now;
+    const off = now - ht;
+    this.clockOff = first ? off : Math.min(this.clockOff + 0.05, off);
+    this.buf.push({ at: ht, s });
+    if (this.buf.length > 40) this.buf.shift();
+    this.latest = s;
+    if (first) { this.seenGoal = s.g; this.seenHit = s.h.length ? s.h[s.h.length - 1][0] : 0; }
+    for (const h of s.h) {
+      if (h[0] <= this.seenHit) continue;
+      this.seenHit = h[0];
+      this.OnEvent({ type: h[1], a: h[2], speed: h[3], x: h[4], y: h[5] });
+    }
+    if (s.g > this.seenGoal) { this.seenGoal = s.g; this.GoalFx(s.gg); }
+    this.score = [...s.sc]; this.shots = [...s.sh]; this.topSpeed = s.top; this.clock = s.cl; this.match = s.mt;
+    // countdown calls follow the host's timer
+    if (s.st === Step.Countdown && s.cd) {
+      const n = Math.ceil(s.tm);
+      if (n !== this.countShown && n >= 1) { this.countShown = n; this.UI.Announce(String(n), White, 0.7); Sfx.play(Snd.Beep, 0.6); }
+    }
+    if (this.lastStep === Step.Countdown && s.st === Step.Play && this.counting) { this.UI.Announce("GO!", Gold, 0.6); Sfx.play(Snd.BeepHigh, 0.7); }
+    this.counting = s.st === Step.Countdown && s.cd === 1;
+    this.lastStep = s.st;
+    this.step = s.st === Step.Wait ? Step.Countdown : s.st;
+    if (s.ov && !this.ended) this.EndMatch();
+  }
+  private clockOff = 0;
+
+  private GoalFx(goal: number) {
+    const scorer = goal === 0 ? 1 : 0;
+    const gp = new V2(0, goal === 0 ? -HL : HL);
+    this.goalGlow[goal].color = PlayerCols[scorer].withAlpha(1);
+    this.fx.confetti(gp, 50, 7, [PlayerCols[scorer], Color.white, Gold], 0.25);
+    this.fx.pop(gp, PlayerCols[scorer], 24, 8, 0.25, 0.6);
+    this.Fx.shake(0.55);
+    this.Back.Flash(PlayerCols[scorer], 0.5);
+    Fx.haptic(true);
+    Sfx.playClip(this.goalClip, 0.75);
+    this.trailPts = [];
+    this.GoalShout(scorer, gp);
+  }
+
+  /** Guest: the puck and the host's mallet ~100 ms in the past, interpolated between the two states around it. */
+  private Interpolate() {
+    const b = this.buf, r = this.rink;
+    if (!b.length) return;
+    const t = performance.now() - this.clockOff - InterpDelay * 1000;
+    let i = b.length - 1;
+    while (i > 0 && b[i - 1].at > t) i--;
+    const B = b[i], A = i > 0 ? b[i - 1] : B;
+    let k = B.at > A.at ? Mathf.clamp01((t - A.at) / (B.at - A.at)) : 1;
+    // a reset (goal, faceoff) is a jump, not a slide
+    if (Math.hypot(B.s.p[0] - A.s.p[0], B.s.p[1] - A.s.p[1]) > 4 || A.s.on !== B.s.on) k = 1;
+    const lp = (a: number, c: number) => a + (c - a) * k;
+    r.px = lp(A.s.p[0], B.s.p[0]); r.py = lp(A.s.p[1], B.s.p[1]); r.vx = B.s.p[2]; r.vy = B.s.p[3];
+    r.puckOn = B.s.on === 1;
+    r.m[0].x = lp(A.s.m[0], B.s.m[0]); r.m[0].y = lp(A.s.m[1], B.s.m[1]);
+  }
+
+  /** The friend left on purpose or never came back. */
+  private FriendLeft() {
+    const link = this.link;
+    this.link = null;
+    if (link && link.room.status !== "closed") link.room.close();
+    if ((this.State === Phase.Playing || this.State === Phase.Paused) && this.mode === Online && !this.ended) {
+      if (this.score[0] + this.score[1] >= 2 || this.playT > 40 || this.clock < MatchTime - 40) {
+        // the match was well underway: the player who stayed takes the win
+        this.forfeit = true;
+        this.overlay.hide();
+        if (this.State === Phase.Paused) this.Resume();
+        this.EndMatch();
+        return;
+      }
+      this.ended = true;
+      this.step = Step.Wait;
+      this.rink.puckOn = false;
+      this.overlay.left("Your friend left", "Not enough of the match was played for a result.");
+      return;
+    }
+    if (this.State === Phase.Over || this.overlay.state === "rematch") this.overlay.left("Your friend left", "No rematch this time.");
+  }
+
+  /** Leaving (menu, title): the friend is told and the room closes. */
+  private LeaveTable() {
+    if (this.link) { this.link.leave(); this.link = null; }
+    this.overlay?.hide();
+    this.overlay?.showBar(false);
+  }
+
+  private OnlineResult() {
+    const me = this.me, fr = 1 - me, a = this.score[me], b = this.score[fr];
+    const won = this.forfeit || a > b, draw = !this.forfeit && a === b;
+    const prize = won ? OnlinePrize : draw ? 20 : 5;
+    this.Coins = this.Coins + prize;
+    if (won) this.Data.add("onlineWins", 1);
+    this.Data.add("onlineGames", 1);
+    this.overlay.showBar(false);
+    this.Finish(new Result({
+      Headline: this.forfeit ? "FRIEND LEFT · YOU WIN!" : won ? "YOU WIN!" : draw ? "IT'S A DRAW" : "FRIEND WINS",
+      HeadlineColor: won ? Gold : PlayerCols[fr], Victory: won,
+      Value: `${a} – ${b}`,
+      BestLine: `YOU ${a} · FRIEND ${b}   ·   +${prize} COINS`,
+      Stats: [["YOUR SHOTS", String(this.shots[me])], ["FRIEND'S SHOTS", String(this.shots[fr])], ["MATCH", String(this.link?.match ?? 1)], ["ONLINE WINS", String(this.Data.get("onlineWins"))]],
+      Primary: this.link ? "REMATCH" : "NEW TABLE",
+      Reward: won ? () => { this.Coins = this.Coins + prize; this.UI.Toast(`+${prize} COINS: DOUBLED!`, 2.5); Sfx.play(Snd.Coin, 0.8); } : null,
+      RewardLabel: `DOUBLE COINS: +${prize} (AD)`,
+    }));
+  }
+
   // ------------------------------------------------------------------ results
 
   private EndMatch() {
+    if (this.ended) return;
+    this.ended = true;
+    if (this.mode === Online && this.me === 0) { this.SendState(); this.link?.pushState(); }
     this.step = Step.Wait;
     this.rink.puckOn = false;
     this.trailPts = [];
@@ -596,16 +900,17 @@ export class AirHockeyGame extends ArcadeGame {
   }
 
   private *ResultLater(): Generator<{ seconds: number; realtime: boolean } | undefined, void, unknown> {
-    const won = this.mode === 0 ? this.score[0] > 0 : this.score[0] > this.score[1];
-    const head = this.mode === 0 ? "TIME UP!" : this.mode === 1 ? (won ? "YOU WIN!" : this.score[0] === this.score[1] ? "DRAW!" : `${CpuNames[this.diff]} WINS`)
+    const won = this.mode === Online ? this.forfeit || this.score[this.me] > this.score[1 - this.me] : this.mode === 0 ? this.score[0] > 0 : this.score[0] > this.score[1];
+    const head = this.mode === Online ? (this.forfeit ? "YOUR FRIEND LEFT" : won ? "YOU WIN!" : this.score[0] === this.score[1] ? "DRAW!" : "FRIEND WINS") : this.mode === 0 ? "TIME UP!" : this.mode === 1 ? (won ? "YOU WIN!" : this.score[0] === this.score[1] ? "DRAW!" : `${CpuNames[this.diff]} WINS`)
       : this.score[0] === this.score[1] ? "DRAW!" : `${this.Names()[won ? 0 : 1]} WINS!`;
     this.UI.Announce(head, this.mode === 1 && !won ? Red : Gold, 1.5);
     if (this.mode === 2 || won) { Sfx.play(Snd.Win, 0.8); this.fxWorld.confetti(this.TableToWorld(V2.zero), 90, 9, [P1Col, P2Col, Gold, Color.white]); }
     else Sfx.play(Snd.Lose, 0.7);
     yield { seconds: 1.6, realtime: false };
     if (this.State !== Phase.Playing) return;
-    this.Data.add("goals", this.score[0]);
-    if (this.mode === 0) this.SoloResult();
+    this.Data.add("goals", this.score[this.me]);
+    if (this.mode === Online) this.OnlineResult();
+    else if (this.mode === 0) this.SoloResult();
     else if (this.mode === 1) this.CpuResult(won);
     else this.DuelResult();
   }

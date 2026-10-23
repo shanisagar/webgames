@@ -438,7 +438,7 @@ export class KiteClashGame extends ArcadeGame {
     this.timerText.gameObject.setActive(solo);
     this.lifeNode.setActive(solo);
     this.comboText.gameObject.setActive(solo);
-    this.windNode.place(new V2(0, 1), two ? new V2(100, -330) : solo ? new V2(110, -205) : new V2(100, -80), new V2(150, 76));
+    this.windNode.place(new V2(0, 1), two ? new V2(100, -330) : solo ? new V2(110, -205) : this.portrait ? new V2(100, -190) : new V2(100, -80), new V2(150, 76));
     // zone hints
     const L = this.UI.Hud.rect;
     for (let i = 0; i < 2; i++) {
@@ -1426,7 +1426,7 @@ export class KiteClashGame extends ArcadeGame {
     if (e.x !== undefined) e.x = Math.round(e.x * 100) / 100;
     if (e.y !== undefined) e.y = Math.round(e.y * 100) / 100;
     this.evLog.push(e);
-    if (this.evLog.length > 8) this.evLog.shift();
+    if (this.evLog.length > 5) this.evLog.shift();
     this.PlayNetEvent(e);
   }
 
@@ -1527,6 +1527,7 @@ export class KiteClashGame extends ArcadeGame {
     this.netDesigns = m.d.slice();
     // the host may have missed my kite design (sent before it was listening): repeat it until it shows up
     if ((m.d[2] !== this.KiteSel || m.d[3] !== this.StrSel) && performance.now() - this.designT > 1000) { this.designT = performance.now(); this.SendDesign(); }
+    if (this.states.length === 1) { for (const e of m.ev) this.lastEv = Math.max(this.lastEv, e.i); } // (re)joined: old news
     for (const e of m.ev) if (e.i > this.lastEv) { this.lastEv = e.i; this.PlayNetEvent(e); }
     // my own kite: predicted here; adopt the host's version on launches, cuts and big disagreements
     const k = this.local, hs = m.k[1];

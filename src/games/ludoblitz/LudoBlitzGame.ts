@@ -1007,7 +1007,7 @@ export class LudoBlitzGame extends ArcadeGame {
       this.UI.Announce(`OFFLINE · ${this.LocalPlayers} PLAYERS`, RoyalGold, 1.5);
       this.UI.Hint("Pass the device around: RED starts. Tap the dice on your turn, then tap a glowing token.");
     } else this.UI.Announce(`STAGE ${this.currentStage.StageNumber} · ${this.currentStage.ArenaName}`, RubyRed, 1.5);
-    if (!this.localMatch && this.Data.get("games", 0) === 0) {
+    if (!this.localMatch && !this.online && this.Data.get("games", 0) === 0) {
       this.UI.Hint("Tap ROLL DICE (or press SPACE) to roll and race your Ruby Red tokens home!");
     }
     Sfx.setIntensity(0.35);
@@ -1094,6 +1094,8 @@ export class LudoBlitzGame extends ArcadeGame {
   // ------------------------------------------------------------------ Title Attract Mode
 
   protected TickBackground(dt: number) {
+    this.lobby.tick(Time.unscaledDeltaTime);
+    this.overlay.tick();
     this.AnimateAmbient(dt);
     this.AnimateTokens(dt);
 

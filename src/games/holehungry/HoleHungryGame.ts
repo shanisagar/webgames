@@ -1351,9 +1351,9 @@ export class HoleHungryGame extends ArcadeGame {
     for (const h of this.holes) if (h.alive && (!lead || h.score > lead.score)) lead = h;
     for (const h of this.holes) {
       if (!h.root.activeSelf) continue;
-      this.PresentHole(h);
       const crown = h === lead && h.score > 0 && this.mode !== Mode.Solo;
       if (h.crown.gameObject.activeSelf !== crown) h.crown.gameObject.setActive(crown);
+      this.PresentHole(h); // after the crown toggle, so a new leader's crown never shows a frame at its old spot
     }
     // camera + outside grass
     this.Fx.CameraTarget = new V2(this.camX, this.camY);
@@ -1971,6 +1971,9 @@ export class HoleHungryGame extends ArcadeGame {
   // ------------------------------------------------------------------ end of round
 
   private StartEnding() {
+    // online host: the guest's hole stops where the guest last saw it
+    const f = this.holes[FriendIdx];
+    if (this.net === 1 && f.alive && f.rAt >= 0) { f.x = f.rx; f.y = f.ry; }
     this.ending = 2.6;
     for (const h of this.holes) { h.wantX = h.wantY = 0; h.vx = h.vy = 0; }
     this.respawnPanel.setActive(false);

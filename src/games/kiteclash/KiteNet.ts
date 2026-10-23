@@ -24,7 +24,7 @@ export const StateHz = 15, InputHz = 25;
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r1 = (v: number) => Math.round(v * 10) / 10;
-const flat = (pts: V2[] | undefined) => { if (!pts) return 0; const o: number[] = []; for (const p of pts) o.push(r2(p.x), r2(p.y)); return o; };
+const flat = (pts: V2[] | undefined, r = r2) => { if (!pts) return 0; const o: number[] = []; for (const p of pts) o.push(r(p.x), r(p.y)); return o; };
 export const unflat = (a: number[] | 0 | undefined) => { const o: V2[] = []; if (!a) return o; for (let i = 0; i + 1 < a.length; i += 2) o.push(new V2(a[i], a[i + 1])); return o; };
 
 /** A kite on the wire. */
@@ -38,7 +38,7 @@ export function snapKite(k: Kite): KSnap {
   return {
     x: r2(k.pos.x), y: r2(k.pos.y), a: r1(k.ang), vx: r1(k.vel.x), vy: r1(k.vel.y), st: k.state, h: k.hold ? 1 : 0,
     gt: r1(k.glassT), bt: r1(k.boostT), sf: k.safeT > 0 ? 1 : 0, fl: r1(k.flash), lt: r1(k.lowT), ct: r1(k.cutT),
-    r: k.tethered ? flat(k.rope.pts) as number[] : [], lo: k.state === KState.Cut ? flat(k.loose?.pts) : 0, ta: k.state === KState.Cut ? flat(k.tail?.pts) : 0,
+    r: k.tethered ? flat(k.rope.pts) as number[] : [], lo: k.state === KState.Cut ? flat(k.loose?.pts, r1) : 0, ta: k.state === KState.Cut ? flat(k.tail?.pts, r1) : 0,
   };
 }
 
