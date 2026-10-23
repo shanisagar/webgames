@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
@@ -6,6 +6,9 @@ import { portalSlugForHost } from "./platform/store";
 import { initNative } from "./platform/native";
 import { initTelemetry } from "./platform/telemetry";
 import { reloadForUpdate } from "./platform/update";
+
+/** The dev preview site (built with VITE_DEV_PREVIEW=1) sits behind an admin login; local development does not. */
+const DevGate = import.meta.env.VITE_DEV_PREVIEW === "1" && !import.meta.env.DEV ? lazy(() => import("./platform/DevGate")) : null;
 
 // After a new deploy, a page (or home-screen shortcut) opened earlier still references the previous build's
 // chunks, which no longer exist. Reload once to pick up the new build instead of failing.
@@ -27,7 +30,7 @@ async function start() {
   }
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App />
+      {DevGate ? <Suspense fallback={<div className="loading">Loading…</div>}><DevGate><App /></DevGate></Suspense> : <App />}
     </StrictMode>,
   );
   void initNative(); // Android / iOS app only: back button, background pause, screen wake lock
