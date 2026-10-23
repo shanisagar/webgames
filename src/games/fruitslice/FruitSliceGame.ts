@@ -44,6 +44,8 @@ class Blade {
   pts: TrailPt[] = [];
   glow!: LineRenderer; core!: LineRenderer;
   active = false; down = false;
+  /** Owned by a bot: never handed to a finger. */
+  reserved = false;
   prevLocal: V2 | null = null;
   hits = 0; lastHit = 0; hitPos = V2.zero; whoosh = 0;
 }
@@ -530,6 +532,7 @@ export class FruitSliceGame extends ArcadeGame {
     f.score = 0; f.misses = 0; f.lifeAt = 100; f.cut = 0; f.bestCombo = 0; f.crits = 0; f.bombs = 0; f.specials = 0;
     f.freezeT = f.frenzyT = f.doubleT = f.flashT = 0; f.timeScale = 1;
     f.dead = false;
+    if (f.bot?.blade) f.bot.blade.reserved = false;
     f.bot = null;
     f.tint.color = new Color(1, 1, 1, 0);
     f.flash.color = new Color(1, 1, 1, 0);
@@ -539,7 +542,7 @@ export class FruitSliceGame extends ArcadeGame {
   private ClearBlades() {
     for (const b of this.blades.values()) this.ReleaseBlade(b);
     this.blades.clear();
-    for (const b of this.bladePool) { b.active = false; b.pts = []; b.glow.positionCount = 0; b.core.positionCount = 0; }
+    for (const b of this.bladePool) { b.active = b.reserved; b.down = false; b.pts = []; b.glow.positionCount = 0; b.core.positionCount = 0; }
   }
 
   protected OnEnterTitle() {
@@ -885,7 +888,7 @@ export class FruitSliceGame extends ArcadeGame {
   }
 
   private TakeBlade() {
-    const b = this.bladePool.find((x) => !x.active);
+    const b = this.bladePool.find((x) => !x.active && !x.reserved);
     if (!b) return null;
     b.active = true;
     return b;
@@ -901,7 +904,8 @@ export class FruitSliceGame extends ArcadeGame {
   private ToWorld(f: Field, local: V2) { const w = f.root.transformPoint(local); return new V2(w.x, w.y); }
 
   private MoveBlade(b: Blade, world: V2) {
-    const now = Time.unscaledTime, udt = Math.max(1e-3, Time.unscaledDeltaTime);
+    // a frame hitch must not make a fast swipe look slow: cap the time step used for blade speed
+    const now = Time.unscaledTime, udt = Mathf.clamp(Time.unscaledDeltaTime, 1e-3, 0.05);
     const last = b.pts[b.pts.length - 1];
     if (!last || V2.distance(last.p, world) > 0.01) b.pts.push({ p: world, t: now });
     else last.t = now;
@@ -1098,7 +1102,7 @@ export class FruitSliceGame extends ArcadeGame {
     for (const b of this.bladePool) {
       if (!b.active) continue;
       while (b.pts.length > 0 && now - b.pts[0].t > TrailLife) b.pts.shift();
-      if (!b.down && b.pts.length < 2) { b.active = false; b.pts = []; b.glow.positionCount = 0; b.core.positionCount = 0; continue; }
+      if (!b.down && b.pts.length < 2) { b.active = b.reserved; b.pts = []; b.glow.positionCount = 0; b.core.positionCount = 0; continue; }
       if (b.pts.length < 2) { b.glow.positionCount = 0; b.core.positionCount = 0; continue; }
       const s = b.field ? b.field.s : 1;
       b.glow.setPositions(b.pts.map((x) => x.p));
@@ -1130,6 +1134,7 @@ export class FruitSliceGame extends ArcadeGame {
       b.down = false;
       b.pts = [];
       b.active = true;
+      b.reserved = true;
       bot.blade = b;
     }
     return bot;

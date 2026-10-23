@@ -41,6 +41,7 @@ export class WordPanel {
   private kbRoot: UINode;
   private enterKey!: Key; private backKey!: Key;
   private msg: Text;
+  private msgBox: UINode;
   private msgT = 0;
   private hintRoot: UINode;
   private hintSlots: { bg: Image; text: Text }[] = [];
@@ -91,9 +92,11 @@ export class WordPanel {
       this.backKey = this.makeKey("⌫", "Backspace");
     }
     this.kbRoot.setActive(keyboard);
-    this.msg = UIKit.label(this.root, "", 34, Color.white);
-    UIKit.glow(this.msg, Ink, 4);
-    this.msg.gameObject.setActive(false);
+    this.msgBox = UIKit.node("Msg", this.root);
+    UIKit.img(this.msgBox, "Bg", TileSprite(), new Color(0.97, 0.97, 1, 0.96)).rectTransform.stretch();
+    this.msg = UIKit.label(this.msgBox, "", 34, Ink);
+    this.msg.rectTransform.stretch();
+    this.msgBox.setActive(false);
     this.nameText = UIKit.label(this.root, "", 32, accent);
     UIKit.glow(this.nameText, Ink, 3);
   }
@@ -137,7 +140,7 @@ export class WordPanel {
     const keyW = kb ? Math.min((W - 2 * pad - 9 * kg) / 10, 118) : 0;
     const keyH = kb ? Math.min(keyW * 1.42, H * 0.095) : 0;
     const kbH = kb ? 3 * keyH + 2 * kg : 0;
-    const nameH = this.nameText.text ? Math.min(46, H * 0.05) : 0;
+    const nameH = this.nameText.text ? Mathf.clamp(H * 0.05, 34, 46) : 0;
     const hintH = this.hidden ? 0 : Math.min(54, H * 0.045);
     const avail = H - kbH - (kb ? 26 : 0) - nameH - hintH - 16;
     const rows = this.rows, gap = 0.1;
@@ -147,7 +150,7 @@ export class WordPanel {
     // centre the grid in the space between the hint strip and the keyboard
     const areaTop = H / 2 - nameH - hintH - 6, areaBottom = -H / 2 + kbH + (kb ? 26 : 0);
     const top = Math.min(areaTop, (areaTop + areaBottom) / 2 + gh / 2);
-    this.nameText.rectTransform.place(UIKit.Center, new V2(0, H / 2 - nameH / 2), new V2(W, nameH));
+    this.nameText.rectTransform.place(UIKit.Center, new V2(0, top + hintH + 4 + nameH / 2), new V2(W, nameH));
     this.nameText.fontSize = Math.round(Math.max(18, nameH * 0.72));
     this.hintRoot.place(UIKit.Center, new V2(0, top + hintH / 2 + 2), new V2(W, hintH));
     for (let c = 0; c < LEN; c++) {
@@ -163,8 +166,9 @@ export class WordPanel {
         tile.node.place(UIKit.Center, new V2((c - 2) * t * (1 + gap), gh / 2 - t / 2 - r * t * (1 + gap)), new V2(t, t));
         tile.text.fontSize = Math.round(t * 0.58);
       }
-    this.msg.rectTransform.place(UIKit.Center, new V2(0, top - gh / 2), new V2(W, 60));
-    this.msg.fontSize = Math.round(Mathf.clamp(t * 0.36, 22, 38));
+    this.msg.fontSize = Math.round(Mathf.clamp(t * 0.34, 22, 36));
+    const mh = this.msg.fontSize * 1.9;
+    this.msgBox.place(UIKit.Center, new V2(0, top - t * 0.55), new V2(Math.min(W - 20, this.msgW()), mh));
     if (kb) {
       const by = -H / 2 + kbH / 2 + 4;
       this.kbRoot.place(UIKit.Center, new V2(0, by), new V2(W, kbH));
@@ -201,7 +205,7 @@ export class WordPanel {
     for (const k of this.keys.values()) { k.mark = -1; k.bg.color = KeyBase; }
     if (this.enterKey) { this.enterKey.bg.color = KeyBase; this.backKey.bg.color = KeyBase; }
     for (const h of this.hintSlots) { h.bg.color = Green.withAlpha(0); h.text.text = ""; }
-    this.msg.gameObject.setActive(false);
+    this.msgBox.setActive(false);
     this.layout();
   }
 
@@ -279,16 +283,20 @@ export class WordPanel {
     if (k && k.mark < 2) { k.mark = 2; k.bg.color = Green; }
   }
 
+  private msgW() { return this.msg.fontSize * (0.6 * this.msg.text.length + 1.6); }
+
   message(s: string, seconds = 1.6) {
     this.msg.text = s;
-    this.msg.gameObject.setActive(true);
+    this.msgBox.sizeDelta = new V2(Math.min(this.w - 20, this.msgW()), this.msgBox.sizeDelta.y);
+    this.msgBox.setActive(true);
+    this.msgBox.setAsLastSibling();
     this.msgT = seconds;
   }
 
   tileWorldKey(r: number, c: number) { return this.tiles[r][c].node; }
 
   update(dt: number) {
-    if (this.msgT > 0) { this.msgT -= dt; if (this.msgT <= 0) this.msg.gameObject.setActive(false); }
+    if (this.msgT > 0) { this.msgT -= dt; if (this.msgT <= 0) this.msgBox.setActive(false); }
     for (const p of this.pendingKeys) p.at -= dt;
     for (const p of this.pendingKeys.filter((q) => q.at <= 0)) p.apply();
     this.pendingKeys = this.pendingKeys.filter((q) => q.at > 0);

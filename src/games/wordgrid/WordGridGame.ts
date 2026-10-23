@@ -292,8 +292,8 @@ export class WordGridGame extends ArcadeGame {
     cpu.root.setActive(vs);
     if (duo) {
       if (portrait) {
-        const h = (H - 140) / 2;
-        p1.place(new V2(0, H / 2 - 120 - h / 2 + 10), new V2(Math.min(W - 20, 1000), h - 20), true);
+        const h = (H - 170) / 2;
+        p1.place(new V2(0, H / 2 - 160 - h / 2 + 10), new V2(Math.min(W - 20, 1000), h - 20), true);
         p0.place(new V2(0, -H / 2 + h / 2 + bottom), new V2(Math.min(W - 20, 1000), h - 20), false);
       } else {
         const w = Math.min((W - 60) / 2, 900);
@@ -302,8 +302,8 @@ export class WordGridGame extends ArcadeGame {
       }
     } else if (vs) {
       if (portrait) {
-        const ch = 300;
-        cpu.place(new V2(W / 2 - 170, H / 2 - top - ch / 2 + 20), new V2(300, ch), false);
+        const ch = Math.min(400, H * 0.2);
+        cpu.place(new V2(0, H / 2 - top - ch / 2 + 10), new V2(420, ch), false);
         p0.place(new V2(0, -H / 2 + (H - top - ch - 10) / 2 + bottom), new V2(Math.min(W - 20, 1000), H - top - ch - 10 - bottom), false);
       } else {
         const side = Math.min(380, W * 0.22);
@@ -315,6 +315,9 @@ export class WordGridGame extends ArcadeGame {
       p0.place(new V2(0, -top / 2 + bottom / 2), new V2(Math.min(W - 20, 1000), H - top - bottom), false);
     }
     this.hintButton.node.setActive(this.mode !== Mode.Duo && n > 0);
+    // face-to-face 2 players: the shared header would sit on player 2's keyboard
+    this.modeText.gameObject.setActive(!(duo && portrait));
+    this.subText.gameObject.setActive(!(duo && portrait));
   }
 
   // ------------------------------------------------------------------ words

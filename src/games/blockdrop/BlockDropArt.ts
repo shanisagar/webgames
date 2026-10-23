@@ -146,8 +146,8 @@ export const BlockDropArt = {
       return new Color(1, 1, 1, CasualArt.fill(Math.min(c1, c2, bar), 3 / 64));
     });
   },
-  get IconCW() { return rotIcon("bd-i-cw", 1); },
-  get IconCCW() { return rotIcon("bd-i-ccw", -1); },
+  get IconCW() { return rotIcon("bd-i-cw2", -1); },
+  get IconCCW() { return rotIcon("bd-i-ccw2", 1); },
   get IconHold() {
     return CasualArt.make("bd-i-hold", 64, 64, (p) => {
       const outer = CasualArt.sdBox(p, new V2(0.8, 0.8), 0.25);
@@ -177,22 +177,25 @@ function arrowIcon(key: string, angle: number) {
 }
 
 function rotIcon(key: string, dir: number) {
+  // 270° arc with an arrow head; dir 1 = clockwise, -1 = counter-clockwise (mirrored)
   return CasualArt.make(key, 64, 64, (p) => {
     const q = new V2(p.x * dir, p.y);
-    const r = q.magnitude;
-    let ang = Math.atan2(q.y, q.x); // -pi..pi
-    const arc = Math.abs(r - 0.55) - 0.12;
-    // arc from 200° down to -60° clockwise (gap at upper right)
-    const inArc = ang < 0.9 || ang > 2.3 ? 1 : 0;
-    let d = inArc ? arc : 1;
-    // arrow head at the end of the arc (angle 0.9)
-    const tip = new V2(Math.cos(0.9) * 0.55, Math.sin(0.9) * 0.55);
-    const head = Math.max(
-      CasualArt.sdCircle(q, tip.add(new V2(0.12, -0.22)), 0.36),
-      -(q.x - tip.x) * 0.2 - (q.y - tip.y) * 0.98 - 0.0,
-    );
-    ang = 0;
-    d = Math.min(d, Math.max(head, CasualArt.sdCircle(q, tip, 0.34)));
-    return new Color(1, 1, 1, CasualArt.fill(d, 3 / 64) * (ang + 1));
+    const r = q.magnitude, ang = Math.atan2(q.y, q.x);
+    const a0 = 1.75; // the arc ends at the top; the gap spans a0..2.9 rad
+    let d = 1;
+    if (!(ang > a0 && ang < 2.9)) d = Math.abs(r - 0.52) - 0.13;
+    // arrow head at the start of the gap, pointing clockwise (down the tangent)
+    const tip = V2.fromAngle(a0, 0.52), t = new V2(Math.sin(a0), -Math.cos(a0)), n = new V2(Math.cos(a0), Math.sin(a0));
+    const a = tip.add(n.mul(0.32)).sub(t.mul(0.12)), b = tip.sub(n.mul(0.32)).sub(t.mul(0.12)), c = tip.add(t.mul(0.36));
+    const inTri = triSd(q, a, b, c);
+    d = Math.min(d, inTri);
+    return new Color(1, 1, 1, CasualArt.fill(d, 3 / 64));
   });
+}
+
+/** Signed distance-ish (negative inside) to a triangle. */
+function triSd(p: V2, a: V2, b: V2, c: V2) {
+  const e = (u: V2, v: V2) => { const ex = v.x - u.x, ey = v.y - u.y; return ((p.x - u.x) * ey - (p.y - u.y) * ex) / Math.hypot(ex, ey); };
+  const s = Math.sign(e(a, b) + e(b, c) + e(c, a)) || 1;
+  return Math.max(-e(a, b) * s, -e(b, c) * s, -e(c, a) * s);
 }
